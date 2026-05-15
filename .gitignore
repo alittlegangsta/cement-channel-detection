@@ -1,0 +1,43 @@
+# ========================
+# 忽略的数据与模型产物目录
+# ========================
+# 忽略目录下的所有内容，但保留 README.md 以保持目录结构
+data/*
+!data/README.md
+outputs/*
+!outputs/README.md
+models/*
+!models/README.md
+logs/*
+!logs/README.md
+
+# 完全忽略的目录
+artifacts/
+checkpoints/
+
+# ========================
+# 数据与模型文件后缀
+# ========================
+*.mat
+*.h5
+*.hdf5
+*.npy
+*.npz
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# ========================
+# 日志与环境变量
+# ========================
+*.log
+.env
+
+# ========================
+# Python 缓存与中间文件
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/

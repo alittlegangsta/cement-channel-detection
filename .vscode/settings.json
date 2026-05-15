@@ -1,0 +1,4 @@
+{
+    "python.defaultInterpreterPath": "/home/dministrator/micromamba/envs/cement_env/bin/python",
+    "python-envs.defaultEnvManager": "ms-python.python:system"
+}
