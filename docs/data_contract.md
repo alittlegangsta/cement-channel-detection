@@ -150,6 +150,20 @@ MVP-1 允许基于 `mat_metadata_v001.json` 生成 raw metadata audit report 和
 - 不保存完整数组，不做 QC、alignment、RelBearing 旋转、label 或 HDF5 生成；
 - 单个文件探查失败必须写入结构化 errors，不得中断整个探查流程。
 
+#### 3.1.4 Raw 变量映射建议草稿
+
+MVP-1 允许基于 `mat_struct_probe_v001.json` 生成 raw variable mapping suggestions 和
+`configs/raw_variable_mapping.draft.yaml`，用于辅助人工确认后续 small-slice reader 的变量路径。
+
+约束：
+
+- 该步骤只读取 struct probe JSON，不重新打开 `.mat` 文件；
+- 每个建议必须包含 confidence 和 reason；
+- 无法可靠推荐的字段必须保留 `TODO_CONFIRM`；
+- `configs/raw_variable_mapping.draft.yaml` 是临时草稿，不应提交 Git；
+- `configs/raw_variable_mapping.yaml` 只能由人工确认后创建，并且不应提交 Git；
+- 在人工确认 `configs/raw_variable_mapping.yaml` 之前，不得进入 controlled small-slice MAT reader。
+
 ---
 
 ### 3.2 中间数据
