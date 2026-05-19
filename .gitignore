@@ -48,3 +48,11 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# ========================
+# Python 包安装元数据目录
+# ========================
+*.egg-info/
+.eggs/
+build/
+dist/
