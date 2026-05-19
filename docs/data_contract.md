@@ -138,6 +138,18 @@ MVP-1 允许基于 `mat_metadata_v001.json` 生成 raw metadata audit report 和
 - `configs/raw_variable_mapping.example.yaml` 可提交 Git；
 - `configs/raw_variable_mapping.yaml` 应由人工复制、确认后作为本地私有配置使用，不应提交 Git。
 
+#### 3.1.3 受控 MATLAB struct 字段探查
+
+当 `mat_metadata_v001.json` 显示关键数据藏在 MATLAB 顶层 struct 中时，MVP-1 允许执行受控 struct 字段探查。
+
+约束：
+
+- MATLAB v5 / v7 文件只允许使用 `scipy.io.loadmat(variable_names=[...])` 加载指定 top-level variable；
+- 必须限制文件数量、每文件变量数量、字段递归深度和数组 preview 元素数量；
+- 只保存字段路径、shape、dtype / class、element_count、role hint 和少量 preview stats；
+- 不保存完整数组，不做 QC、alignment、RelBearing 旋转、label 或 HDF5 生成；
+- 单个文件探查失败必须写入结构化 errors，不得中断整个探查流程。
+
 ---
 
 ### 3.2 中间数据
