@@ -1,0 +1,175 @@
+# configs/paths.local.example.yaml
+#
+# Local path configuration template.
+#
+# Copy this file to:
+#
+#   configs/paths.local.yaml
+#
+# Then modify paths if needed.
+#
+# IMPORTANT:
+# - paths.local.yaml should NOT be committed to Git.
+# - This example file may be committed.
+# - Keep source code and data separated.
+# - Do not place raw .mat, HDF5, model weights, logs, or large outputs inside the Git repo.
+#
+# Current supported raw layouts:
+#
+# 1. single_well_flat
+#
+#    raw/
+#    ├── CAST.mat
+#    ├── D2_XSI_RelBearing_Inclination.mat
+#    └── XSILMR/
+#        ├── XSILMR01.mat
+#        ├── ...
+#        └── XSILMR13.mat
+#
+# 2. by_well
+#
+#    raw/
+#    ├── well_001/
+#    │   ├── XSI.mat
+#    │   ├── CAST.mat
+#    │   └── pose.mat
+#    └── well_002/
+#        ├── XSI.mat
+#        ├── CAST.mat
+#        └── pose.mat
+
+schema_version: schema_v001
+config_version: paths_local_v001
+environment: local
+
+project:
+  name: cement-channel-detection
+  root: /home/xiaoj/cement-channel-detection
+  source_dir: /home/xiaoj/cement-channel-detection/src
+  scripts_dir: /home/xiaoj/cement-channel-detection/scripts
+  configs_dir: /home/xiaoj/cement-channel-detection/configs
+  docs_dir: /home/xiaoj/cement-channel-detection/docs
+  tests_dir: /home/xiaoj/cement-channel-detection/tests
+  reports_dir: /home/xiaoj/cement-channel-detection/reports
+  experiments_dir: /home/xiaoj/cement-channel-detection/experiments
+
+python:
+  env_manager: micromamba
+  env_name: cement_env
+  version: "3.10"
+  interpreter: /home/dministrator/micromamba/envs/cement_env/bin/python
+
+data:
+  root: /home/xiaoj/cement-channel-data
+
+  # Raw input data. This directory is read-only by convention.
+  raw: /home/xiaoj/cement-channel-data/raw
+
+  # Temporary intermediate arrays or extracted subsets.
+  interim: /home/xiaoj/cement-channel-data/interim
+
+  # Aligned HDF5 / Zarr / memmap outputs.
+  processed: /home/xiaoj/cement-channel-data/processed
+
+  # Offline STFT / STC / APES / physics feature files.
+  features: /home/xiaoj/cement-channel-data/features
+
+  # Raw inventory, data manifest, experiment manifest.
+  manifests: /home/xiaoj/cement-channel-data/manifests
+
+  # Local generated reports, plots, QC previews, experiment figures.
+  reports: /home/xiaoj/cement-channel-data/reports
+
+  # Runtime logs.
+  logs: /home/xiaoj/cement-channel-data/logs
+
+  # Local model outputs. Usually small tests only on local machine.
+  models: /home/xiaoj/cement-channel-data/models
+
+  # Prediction outputs.
+  predictions: /home/xiaoj/cement-channel-data/predictions
+
+  # Temporary files. Safe to delete after confirming no running job uses them.
+  tmp: /home/xiaoj/cement-channel-data/tmp
+
+raw_layout:
+  # Current real local data layout.
+  #
+  # Supported values:
+  # - single_well_flat
+  # - by_well
+  organization: single_well_flat
+
+  # Used when organization = single_well_flat.
+  well_id: D2
+
+  # CAST file located directly under data.raw.
+  cast_files:
+    - CAST.mat
+
+  # Pose / trajectory / inclination / RelBearing file located directly under data.raw.
+  pose_files:
+    - D2_XSI_RelBearing_Inclination.mat
+
+  # XSI receiver files are stored under data.raw / xsi_receiver_dir.
+  xsi_receiver_dir: XSILMR
+
+  # Expected receiver files:
+  # XSILMR01.mat ... XSILMR13.mat
+  xsi_receiver_file_patterns:
+    - "XSILMR*.mat"
+
+  expected_xsi_receiver_files: 13
+
+  # Optional fallback fields for future by_well layout.
+  # These are ignored when organization = single_well_flat.
+  well_dir_pattern: "well_*"
+  xsi_file_patterns:
+    - "*XSI*.mat"
+    - "*xsi*.mat"
+  cast_file_patterns:
+    - "*CAST*.mat"
+    - "*cast*.mat"
+  pose_file_patterns:
+    - "*pose*.mat"
+    - "*trajectory*.mat"
+    - "*survey*.mat"
+    - "*Inc*.mat"
+    - "*RelBearing*.mat"
+    - "*Inclination*.mat"
+
+outputs:
+  raw_inventory_csv: /home/xiaoj/cement-channel-data/manifests/raw_file_inventory.csv
+  data_manifest_json: /home/xiaoj/cement-channel-data/manifests/data_manifest_v001.json
+
+  aligned_hdf5: /home/xiaoj/cement-channel-data/processed/aligned_data_v001.h5
+  labels_hdf5: /home/xiaoj/cement-channel-data/processed/labels_v001.h5
+
+  physics_features_hdf5: /home/xiaoj/cement-channel-data/features/features_physics_v001.h5
+  stft_features_hdf5: /home/xiaoj/cement-channel-data/features/features_stft_v001.h5
+  stc_features_hdf5: /home/xiaoj/cement-channel-data/features/features_stc_v001.h5
+  apes_features_hdf5: /home/xiaoj/cement-channel-data/features/features_apes_v001.h5
+
+  qc_report_dir: /home/xiaoj/cement-channel-data/reports/qc
+  alignment_report_dir: /home/xiaoj/cement-channel-data/reports/alignment
+  label_report_dir: /home/xiaoj/cement-channel-data/reports/labels
+  experiment_report_dir: /home/xiaoj/cement-channel-data/reports/experiments
+
+runtime:
+  default_mode: local
+  dry_run: true
+  overwrite: false
+
+  # Local machine should run only small samples by default.
+  limit_depth: 100
+  max_wells: 1
+
+  num_workers: 2
+  log_level: INFO
+
+safety:
+  forbid_writing_inside_project_data_dir: true
+  forbid_git_tracking_large_files: true
+  forbid_overwrite_existing_outputs_by_default: true
+  require_manifest_for_experiment: true
+  require_config_hash: true

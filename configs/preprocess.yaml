@@ -1,0 +1,392 @@
+# configs/preprocess.yaml
+#
+# Preprocessing configuration for XSI / CAST cement channel detection project.
+#
+# This file defines common preprocessing defaults used before alignment,
+# label generation, feature extraction, and training.
+#
+# It should remain consistent with:
+#
+# - docs/report.md
+# - docs/data_contract.md
+# - docs/development_workflow.md
+# - docs/experiment_protocol.md
+# - AGENTS.md
+#
+# Do not put machine-specific paths here.
+# Machine paths belong to:
+#
+# - configs/paths.local.yaml
+# - configs/paths.server.yaml
+#
+# This file may be committed to Git.
+
+schema_version: schema_v001
+config_version: preprocess_v001
+
+general:
+  project_name: cement-channel-detection
+  data_version: data_v001
+  schema_version: schema_v001
+
+  # The pipeline must not overwrite existing outputs unless explicitly requested.
+  overwrite: false
+
+  # Default dry-run setting for safety. Individual scripts may override via CLI.
+  dry_run: false
+
+  # Used for reproducible sampling, synthetic tiny samples, and randomized checks.
+  random_seed: 42
+
+  log_level: INFO
+
+units:
+  depth_unit: m
+  time_unit: ms
+  sampling_interval_unit: us
+  azimuth_unit: degree
+  zc_unit: MRayl
+  frequency_unit: Hz
+
+  # Slowness unit should be explicitly confirmed before STC feature generation.
+  slowness_unit: null
+
+xsi:
+  expected_receiver_count: 13
+  expected_side_count: 8
+  expected_time_sample_count: 1024
+
+  sampling_interval_us: 10.0
+  total_time_ms: 10.24
+
+  # Valid frequency range from project report.
+  expected_effective_frequency_max_hz: 30000.0
+
+  waveform_dtype: float32
+
+  dimension_order:
+    canonical: [depth, receiver, side, time]
+
+  # XSI Side azimuth should not be hard-coded in implementation if unknown.
+  # If instrument documentation confirms Side A zero angle, put it here.
+  side_azimuth:
+    require_explicit_side_definition: true
+    theta0_deg: null
+    side_step_deg: 45.0
+    expected_side_count: 8
+    wrap_range: [0.0, 360.0]
+
+  time_axis:
+    start_ms: 0.0
+    sample_interval_us: 10.0
+    sample_count: 1024
+
+cast:
+  expected_azimuth_count: 180
+  azimuth_step_deg: 2.0
+  azimuth_start_deg: 0.0
+  zc_dtype: float32
+  zc_unit: MRayl
+
+pose:
+  required_fields:
+    - Inc
+    - RelBearing
+
+  inc_unit: degree
+  relbearing_unit: degree
+
+  angle_wrap:
+    range: [0.0, 360.0]
+
+  # Low inclination means the high-side direction is unstable.
+  low_inclination:
+    enabled: true
+    I_min_deg: 1.0
+    I_stable_deg: 5.0
+    output_orientation_uncertain: true
+    output_orientation_confidence: true
+
+filtering:
+  xsi_highpass:
+    enabled: true
+    filter_type: butterworth
+    order: 4
+    cutoff_hz: 1000.0
+
+    # Zero-phase filtering is preferred for offline preprocessing if feasible.
+    zero_phase: true
+
+    # Preserve the unfiltered aligned waveform separately.
+    save_filtered_waveform: true
+    filtered_dataset_name: /aligned/xsi_waveform_filtered
+
+  detrend:
+    enabled: false
+    method: linear
+
+  normalize:
+    # Do not normalize globally across all wells by default.
+    enabled: false
+    method: null
+
+depth:
+  # CAST high-resolution depth axis is the default target axis.
+  target_axis_source: CAST
+
+  interpolation:
+    method: linear
+    allow_extrapolation: false
+    fill_value: nan
+
+  local_depth_lag:
+    enabled: true
+
+    # Local lag estimation should be performed after initial interpolation.
+    search_window_m: 1.0
+    step_m: null
+
+    # If best lag is larger than threshold, lower label confidence or mark uncertain.
+    max_allowed_abs_lag_m: 0.5
+
+    output_fields:
+      - /alignment/local_depth_lag
+      - /alignment/depth_alignment_confidence
+      - /alignment/alignment_residual
+      - /alignment/depth_uncertain_mask
+
+azimuth:
+  high_side_normalization:
+    enabled: true
+
+    # Candidate convention only. The selected sign must be validated experimentally.
+    default_candidate_formula: theta_aligned = (theta_raw + RelBearing) mod 360
+
+    test_signs:
+      - plus
+      - minus
+
+    selected_sign: unknown
+
+    output_fields:
+      - /alignment/azimuth_alignment_confidence
+      - /metadata/relbearing_sign_selected
+
+  circular_topology:
+    enabled: true
+    wrap_range: [0.0, 360.0]
+    use_circular_distance: true
+    use_circular_padding_later: true
+    angle_encoding_later: sin_cos
+
+quality_control:
+  xsi:
+    enabled: true
+
+    compute:
+      - xsi_dead_receiver_mask
+      - xsi_dead_side_mask
+      - xsi_saturation_ratio
+      - xsi_clipping_ratio
+      - xsi_noise_floor
+      - xsi_snr
+      - xsi_first_arrival_time
+      - xsi_time_zero_shift
+      - xsi_receiver_consistency
+      - xsi_polarity_check
+      - xsi_gain_change_flag
+
+    snr:
+      # Placeholder windows; must be refined after inspecting data.
+      noise_window_ms: [0.0, 0.2]
+      signal_window_ms: [0.2, 3.0]
+      min_snr_for_high_quality: 3.0
+
+    saturation:
+      max_saturation_ratio: 0.01
+
+    clipping:
+      max_clipping_ratio: 0.01
+
+  cast:
+    enabled: true
+
+    compute:
+      - cast_missing_sector_ratio
+      - cast_echo_amplitude_quality
+      - cast_travel_time_quality
+      - cast_radius_variation
+      - cast_ovality
+      - cast_thickness_anomaly
+      - cast_collar_mask
+      - cast_low_confidence_mask
+      - cast_sector_quality_weight
+
+    missing_sector:
+      max_missing_sector_ratio: 0.1
+
+  quality_flags:
+    enabled: true
+    dtype: uint32
+
+    bit_definitions:
+      0: LOW_INC
+      1: DEPTH_UNCERTAIN
+      2: AZIMUTH_UNCERTAIN
+      3: XSI_LOW_SNR
+      4: XSI_DEAD_RECEIVER
+      5: XSI_DEAD_SIDE
+      6: CAST_LOW_QUALITY
+      7: CAST_MISSING_SECTOR
+      8: CAST_COLLAR
+      9: MICROANNULUS_SUSPECT
+      10: FREE_PIPE_SUSPECT
+      11: LIGHT_CEMENT_SUSPECT
+      12: ECCENTERING_STRONG
+      13: LABEL_LOW_CONFIDENCE
+      14: EXPERT_REVIEW_REQUIRED
+      15: RESERVED
+
+strong_weak_side:
+  enabled: true
+
+  # Prefer CAST geometry / echo / travel-time QC if available.
+  prefer_cast_geometry_fields: true
+
+  fallback_to_zc_asymmetry: true
+
+  output_fields:
+    - /quality/theta_strong_deg
+    - /quality/theta_weak_deg
+    - /quality/eccentricity_score
+    - /quality/strong_side_confidence
+    - /quality/side_quality_weight
+    - /quality/cast_sector_quality_weight
+
+  confidence:
+    lower_confidence_if_only_zc_available: true
+
+effective_window:
+  enabled: true
+
+  quality_window:
+    center: theta_strong_deg
+    half_width_deg: 45.0
+
+  anomaly_window:
+    center: theta_lowZc_deg
+    half_width_deg: 45.0
+    allow_empty_if_no_reliable_anomaly: true
+
+  output_fields:
+    - /quality/effective_window_mask
+    - /quality/effective_window_quality_mask
+    - /quality/effective_window_anomaly_mask
+
+hdf5:
+  compression:
+    enabled: true
+    algorithm: gzip
+    level: 4
+
+  shuffle: true
+
+  # Chunking should be tuned after data inspection.
+  # Initial conservative defaults.
+  chunks:
+    xsi_waveform: [16, 13, 8, 1024]
+    cast_zc: [128, 180]
+    depth_side: [256, 8]
+    depth_cast_azimuth: [128, 180]
+
+  required_groups:
+    - /aligned
+    - /axis
+    - /pose
+    - /alignment
+    - /quality
+    - /label
+    - /features
+    - /metadata
+
+  required_metadata:
+    - data_version
+    - schema_version
+    - git_commit
+    - preprocess_config_hash
+    - depth_unit
+    - time_unit
+    - azimuth_unit
+    - zc_unit
+    - sampling_interval_us
+    - xsi_receiver_count
+    - xsi_side_count
+    - cast_azimuth_count
+    - time_sample_count
+
+manifest:
+  enabled: true
+  raw_inventory_filename: raw_file_inventory.csv
+  data_manifest_filename: data_manifest_v001.json
+
+  record:
+    - source_files
+    - file_size
+    - variable_names
+    - shapes
+    - dtypes
+    - depth_range
+    - time_sample_count
+    - receiver_count
+    - side_count
+    - cast_azimuth_count
+    - has_inc
+    - has_relbearing
+
+validation:
+  fail_on_missing_required_fields: true
+  fail_on_shape_mismatch: true
+  fail_on_invalid_angle_range: true
+  fail_on_invalid_label_encoding: true
+  warn_on_high_nan_ratio: true
+
+  thresholds:
+    max_nan_ratio_warning: 0.05
+    max_nan_ratio_error: 0.2
+    min_depth_count: 1
+    expected_side_count: 8
+    expected_receiver_count: 13
+    expected_cast_azimuth_count: 180
+    expected_time_sample_count: 1024
+
+runtime:
+  # Local scripts may override these values via CLI.
+  dry_run: false
+  overwrite: false
+  limit_depth: null
+  max_wells: null
+  num_workers: 2
+
+outputs:
+  save_figures: true
+  save_reports: true
+  save_schema_report: true
+  save_qc_report: true
+  save_preprocess_log: true
+
+  figure_formats:
+    - png
+
+safety:
+  # Raw data should never be modified.
+  raw_is_read_only: true
+
+  # Do not overwrite existing outputs unless CLI explicitly sets --overwrite true.
+  require_explicit_overwrite: true
+
+  # Preprocessing should never write large outputs into the Git repository.
+  forbid_large_outputs_inside_project_repo: true
+
+  # Formal runs must save manifest and config hash.
+  require_manifest: true
+  require_config_hash: true
