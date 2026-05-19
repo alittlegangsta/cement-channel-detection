@@ -112,6 +112,18 @@ RelBearing
 - 不得在 PyTorch `Dataset.__getitem__` 中动态读取；
 - 只允许在 manifest、QC、对齐和转换阶段读取。
 
+#### 3.1.1 受控 MAT 元数据读取
+
+MVP-1 允许在 raw manifest 之后执行受控 MAT 元数据读取，用于确认原始文件是否可打开、顶层变量名、shape、dtype / class 和启发式 role hint。
+
+约束：
+
+- 优先使用 `scipy.io.whosmat` 读取 MATLAB v5 / v7 文件目录；
+- 对 MATLAB v7.3 / HDF5 文件，只允许用 `h5py` 读取 group / dataset 元数据；
+- 禁止使用 `scipy.io.loadmat` 读取大型变量；
+- 禁止读取完整 XSI 波形矩阵或完整 CAST 图像；
+- 该步骤只输出 `mat_metadata_v001.json`，不生成 HDF5，不做 QC 算法、不做 alignment、不做 label。
+
 ---
 
 ### 3.2 中间数据

@@ -3,7 +3,7 @@ name = "cement-channel-detection"
 version = "0.1.0"
 description = "Interpretable cement channeling detection from XSI and CAST logs"
 requires-python = ">=3.10"
-dependencies = ["pyyaml>=6.0"]
+dependencies = ["h5py>=3.8", "pyyaml>=6.0", "scipy>=1.10"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
