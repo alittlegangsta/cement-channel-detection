@@ -23,6 +23,7 @@ CSV_FIELDNAMES = [
 
 DEFAULT_MANIFEST_VERSION = "data_manifest_v001"
 DEFAULT_SCHEMA_VERSION = "schema_v001"
+DEFAULT_DATA_VERSION = "data_v001"
 
 
 class ManifestBuildError(RuntimeError):
@@ -194,6 +195,7 @@ def build_manifest(
     manifest = {
         "manifest_version": DEFAULT_MANIFEST_VERSION,
         "schema_version": str(config.get("schema_version", DEFAULT_SCHEMA_VERSION)),
+        "data_version": str(config.get("data_version", DEFAULT_DATA_VERSION)),
         "stage": "EXP-1",
         "task": "raw_data_manifest",
         "status": "completed_with_warnings" if warnings else "completed",
