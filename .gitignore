@@ -31,6 +31,7 @@ checkpoints/
 # Local path configs
 configs/paths.local.yaml
 configs/paths.server.yaml
+configs/raw_variable_mapping.yaml
 
 # ========================
 # 日志与环境变量

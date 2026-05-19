@@ -1,0 +1,146 @@
+schema_version: schema_v001
+mapping_version: raw_variable_mapping_v001
+well_id: D2
+status: draft_requires_human_review
+
+cast:
+  file: CAST.mat
+  zc_variable: TODO_CONFIRM
+  depth_variable: TODO_CONFIRM
+  azimuth_variable: TODO_CONFIRM
+  candidates:
+    zc:
+      []
+    depth:
+      []
+    azimuth: []
+
+pose:
+  file: D2_XSI_RelBearing_Inclination.mat
+  depth_variable: TODO_CONFIRM
+  inclination_variable: TODO_CONFIRM
+  relbearing_variable: TODO_CONFIRM
+  candidates:
+    depth:
+      []
+    inclination:
+      - variable: Inc
+        file_role: pose
+        receiver_index: null
+        shape: [1, 13508]
+        dtype_or_class: single
+        role_hint: inclination_candidate
+        confidence: 0.95
+        reason: role_hint=inclination_candidate
+    relbearing:
+      - variable: RelBearing
+        file_role: pose
+        receiver_index: null
+        shape: [1, 13508]
+        dtype_or_class: single
+        role_hint: relbearing_candidate
+        confidence: 0.95
+        reason: role_hint=relbearing_candidate
+
+xsi:
+  receiver_dir: XSILMR
+  expected_receiver_files: 13
+  receiver_file_pattern: XSILMR*.mat
+  waveform_variable: TODO_CONFIRM
+  depth_variable: TODO_CONFIRM
+  time_variable: TODO_CONFIRM
+  receiver_index_source: filename
+  candidates:
+    waveform:
+      - variable: XSILMR01
+        file_role: xsi_receiver
+        receiver_index: 1
+        shape: [1, 1]
+        dtype_or_class: struct
+        role_hint: xsi_waveform_candidate
+        confidence: 0.85
+        reason: role_hint=xsi_waveform_candidate
+      - variable: XSILMR02
+        file_role: xsi_receiver
+        receiver_index: 2
+        shape: [1, 1]
+        dtype_or_class: struct
+        role_hint: xsi_waveform_candidate
+        confidence: 0.85
+        reason: role_hint=xsi_waveform_candidate
+      - variable: XSILMR03
+        file_role: xsi_receiver
+        receiver_index: 3
+        shape: [1, 1]
+        dtype_or_class: struct
+        role_hint: xsi_waveform_candidate
+        confidence: 0.85
+        reason: role_hint=xsi_waveform_candidate
+      - variable: XSILMR04
+        file_role: xsi_receiver
+        receiver_index: 4
+        shape: [1, 1]
+        dtype_or_class: struct
+        role_hint: xsi_waveform_candidate
+        confidence: 0.85
+        reason: role_hint=xsi_waveform_candidate
+      - variable: XSILMR05
+        file_role: xsi_receiver
+        receiver_index: 5
+        shape: [1, 1]
+        dtype_or_class: struct
+        role_hint: xsi_waveform_candidate
+        confidence: 0.85
+        reason: role_hint=xsi_waveform_candidate
+      - variable: XSILMR06
+        file_role: xsi_receiver
+        receiver_index: 6
+        shape: [1, 1]
+        dtype_or_class: struct
+        role_hint: xsi_waveform_candidate
+        confidence: 0.85
+        reason: role_hint=xsi_waveform_candidate
+      - variable: XSILMR07
+        file_role: xsi_receiver
+        receiver_index: 7
+        shape: [1, 1]
+        dtype_or_class: struct
+        role_hint: xsi_waveform_candidate
+        confidence: 0.85
+        reason: role_hint=xsi_waveform_candidate
+      - variable: XSILMR08
+        file_role: xsi_receiver
+        receiver_index: 8
+        shape: [1, 1]
+        dtype_or_class: struct
+        role_hint: xsi_waveform_candidate
+        confidence: 0.85
+        reason: role_hint=xsi_waveform_candidate
+      - variable: XSILMR09
+        file_role: xsi_receiver
+        receiver_index: 9
+        shape: [1, 1]
+        dtype_or_class: struct
+        role_hint: xsi_waveform_candidate
+        confidence: 0.85
+        reason: role_hint=xsi_waveform_candidate
+      - variable: XSILMR10
+        file_role: xsi_receiver
+        receiver_index: 10
+        shape: [1, 1]
+        dtype_or_class: struct
+        role_hint: xsi_waveform_candidate
+        confidence: 0.85
+        reason: role_hint=xsi_waveform_candidate
+    depth:
+      []
+    time:
+      []
+
+human_review:
+  required: true
+  notes:
+    - Confirm variable names before controlled small-slice MAT reading.
+    - Confirm whether CAST Zc shape is depth x azimuth or azimuth x depth.
+    - Confirm whether XSI receiver waveform shape is depth x time or time x depth.
+    - Confirm depth units and time units.
