@@ -37,7 +37,6 @@ configs/paths.server.yaml
 # ========================
 *.log
 .env
-.env.*
 
 # ========================
 # Python 缓存与中间文件
@@ -56,3 +55,5 @@ __pycache__/
 .eggs/
 build/
 dist/
+.ruff_cache/
+.mypy_cache/
