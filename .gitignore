@@ -28,11 +28,16 @@ checkpoints/
 *.ckpt
 *.onnx
 
+# Local path configs
+configs/paths.local.yaml
+configs/paths.server.yaml
+
 # ========================
 # 日志与环境变量
 # ========================
 *.log
 .env
+.env.*
 
 # ========================
 # Python 缓存与中间文件
@@ -41,3 +46,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ========================
+# Python 包安装元数据目录
+# ========================
+*.egg-info/
+.eggs/
+build/
+dist/
