@@ -193,6 +193,24 @@ MVP-1 允许基于 `small_slice_v001.npz` 生成 tiny HDF5 prototype，用于验
 - 输出写入外部数据目录的 `processed/`，不得提交 Git；
 - 不做 RelBearing 旋转、label、feature extraction 或 model training。
 
+#### 3.1.7 MVP-1 initial QC skeleton
+
+MVP-1 允许在 tiny slice / tiny HDF5 上运行初始 QC skeleton。
+
+允许范围：
+
+- shape check、finite / NaN / Inf / zero ratio；
+- simple clipping-like ratio；
+- min / max / mean / std；
+- CAST Zc、XSI waveform、Inc 和 RelBearing 的基础 range summary；
+- 结构化 warnings / errors。
+
+禁止范围：
+
+- STC、APES、复杂首波拾取；
+- depth alignment、RelBearing 旋转；
+- label generation、feature extraction 或 model training。
+
 ---
 
 ### 3.2 中间数据
