@@ -670,6 +670,27 @@ valid masks and interpolation NaN / extrapolation statistics
 默认禁止外推；若 small-slice 的 CAST / XSI 首段不覆盖 proposed grid，只能记录
 `skipped_no_common_overlap` warning，不得读取全量 waveform 或 full `CAST.Zc` 来补齐。
 
+#### 7.4.4b MVP-2 overlap-targeted small-slice artifacts
+
+若默认 `small_slice_v001.npz` 与 proposed canonical grid 没有共同覆盖，可在共同
+overlap 中部重新读取受控小片段：
+
+```text
+/home/xiaoj/cement-channel-data/interim/small_slice_overlap_v001.npz
+/home/xiaoj/cement-channel-data/interim/small_slice_overlap_summary_v001.json
+/home/xiaoj/cement-channel-data/interim/depth_resample_overlap_preview_v001.npz
+/home/xiaoj/cement-channel-data/reports/depth_resample_overlap_preview_report.md
+/home/xiaoj/cement-channel-data/reports/depth_resample_overlap_preview_report.json
+```
+
+默认窗口来自 `depth_grid_proposal.json` 的 common overlap 中点，窗口长度不得超过
+2.0 m，默认 `max_depth_samples` 和 `max_time_samples` 必须保持小片段规模。
+该流程可按 depth offset 读取 MAT 中的局部 `CAST.Zc` 与 XSI waveform，但不得读取
+full waveform 或 full `CAST.Zc`。
+
+若 overlap-targeted slice 仍不能形成 CAST / XSI / pose 共同覆盖，报告必须写入
+error 并停止 RelBearing 证据增强。
+
 #### 7.4.5 MVP-2 RelBearing angle utilities
 
 RelBearing 方位归一化必须先实现独立、可测试的角度工具，再进入符号验证：
@@ -687,6 +708,16 @@ orientation_uncertain low-inc mask
 
 此阶段不得选择最终 plus/minus 符号，不得生成标签。若 Side A 的物理零度未确认，
 `xsi_side_azimuth_deg` 仍必须来自配置或显式候选，不得在正式 alignment 中硬编码。
+
+Overlap-targeted RelBearing validation 可额外输出：
+
+```text
+/home/xiaoj/cement-channel-data/reports/relbearing_sign_validation_overlap_report.md
+/home/xiaoj/cement-channel-data/reports/relbearing_sign_validation_overlap_report.json
+```
+
+即使 overlap-targeted preview 有 CAST/XSI 小片段证据，若 plus/minus 仍无法区分，
+decision 必须保持 `insufficient_evidence`，不得自动写入正式 alignment 配置。
 
 ---
 

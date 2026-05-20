@@ -707,6 +707,22 @@ no-rotation/random-rotation 无法区分，validation decision 必须为
 `insufficient_evidence`，不得硬选符号，不得进入正式 alignment 或 MVP-3，除非人工确认
 或后续明确批准 dual-sign / ablation 协议。
 
+若初始 small-slice 与 proposed depth grid 没有共同覆盖，可执行 Stage 6b：
+overlap-targeted small-slice + RelBearing evidence augmentation。该阶段只能在
+`depth_grid_proposal.json` 的共同 overlap 内读取不超过小片段规模的数据，默认窗口
+不超过 2.0 m，并输出：
+
+```text
+small_slice_overlap_v001.npz
+small_slice_overlap_summary_v001.json
+depth_resample_overlap_preview_v001.npz
+depth_resample_overlap_preview_report.md/json
+relbearing_sign_validation_overlap_report.md/json
+```
+
+Stage 6b 仍不得选择最终 RelBearing sign；如果 plus/minus 仍无法区分，必须继续
+`insufficient_evidence` 并要求人工确认或 dual-sign / ablation。
+
 Go 条件：
 
 ```text

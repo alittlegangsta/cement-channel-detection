@@ -62,6 +62,7 @@ def build_depth_resample_preview(
     depth_grid_proposal_json: Path | str,
     small_slice_npz: Path | str | None = None,
     max_preview_depth_samples: int = 16,
+    require_small_slice_overlap: bool = False,
 ) -> tuple[DepthResamplePreviewReport, dict[str, np.ndarray]]:
     proposal = load_depth_grid_proposal(depth_grid_proposal_json)
     canonical_depth = canonical_depth_from_proposal(proposal)
@@ -83,7 +84,9 @@ def build_depth_resample_preview(
         canonical_depth,
         arrays,
         warnings,
+        errors,
         max_preview_depth_samples=max_preview_depth_samples,
+        require_overlap=require_small_slice_overlap,
     )
     summaries = {key: summarize_resampled_array(key, value) for key, value in arrays.items()}
     return (
@@ -312,14 +315,18 @@ def _resample_small_slice(
     canonical_depth: np.ndarray,
     arrays: dict[str, np.ndarray],
     warnings: list[str],
+    errors: list[str],
     *,
     max_preview_depth_samples: int,
+    require_overlap: bool,
 ) -> dict[str, Any]:
     arrays["small_slice_preview_depth"] = np.empty((0,), dtype=np.float32)
     arrays["small_slice_cast_zc_on_preview"] = np.empty((0, 0), dtype=np.float32)
     arrays["small_slice_xsi_waveform_on_preview"] = np.empty((0, 0, 0, 0), dtype=np.float32)
     if small_slice_path is None or not small_slice_path.exists():
         warnings.append("small_slice_v001.npz is missing; skipped small-slice array preview.")
+        if require_overlap:
+            errors.append("Required overlap-targeted small-slice NPZ is missing.")
         return {"status": "skipped_missing", "warnings": ["small slice NPZ missing"]}
 
     with np.load(small_slice_path) as data:
@@ -333,6 +340,10 @@ def _resample_small_slice(
         message = "small-slice depth ranges do not overlap the proposed canonical grid."
         warnings.append(message)
         status_warnings.append(message)
+        if require_overlap:
+            errors.append(
+                "Overlap-targeted small-slice still has no common canonical-grid coverage."
+            )
         return {"status": "skipped_no_common_overlap", "warnings": status_warnings}
 
     if "cast_zc" in small and "cast_depth" in small:

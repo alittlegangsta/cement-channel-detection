@@ -89,6 +89,9 @@ def validate_relbearing_sign(
     inc = _require_array(preview, "inc_deg_on_grid")
     canonical_depth = _require_array(preview, "canonical_depth")
     cast_zc_preview = np.asarray(preview.get("small_slice_cast_zc_on_preview", np.empty((0, 0))))
+    xsi_waveform_preview = np.asarray(
+        preview.get("small_slice_xsi_waveform_on_preview", np.empty((0, 0, 0, 0)))
+    )
     small_slice_status = _as_dict(resample_report.get("small_slice")).get("status")
     if small_slice_status != "completed":
         warnings.append(
@@ -99,6 +102,7 @@ def validate_relbearing_sign(
     candidate_metrics = _candidate_metrics(
         relbearing,
         cast_zc_preview,
+        xsi_waveform_preview,
         random_seed=random_seed,
     )
     orientation_summary = _orientation_confidence_summary(inc)
@@ -220,6 +224,7 @@ def write_relbearing_validation_outputs(
 def _candidate_metrics(
     relbearing_deg: np.ndarray,
     cast_zc_preview: np.ndarray,
+    xsi_waveform_preview: np.ndarray,
     *,
     random_seed: int,
 ) -> dict[str, RelBearingCandidateMetrics]:
@@ -241,12 +246,20 @@ def _candidate_metrics(
                 convention=candidate,  # type: ignore[arg-type]
             )
         contrast = _circular_contrast(cast_zc_preview)
-        evidence_available = contrast is not None and cast_zc_preview.shape[0] > 0
+        xsi_contrast = _xsi_side_contrast(xsi_waveform_preview)
+        evidence_available = (
+            contrast is not None and cast_zc_preview.shape[0] > 0
+        ) or xsi_contrast is not None
         notes = []
         score = None
         if evidence_available:
+            notes.append("Overlap-targeted small-slice evidence is available.")
+            if contrast is not None:
+                notes.append(f"CAST circular contrast={contrast:.6g}.")
+            if xsi_contrast is not None:
+                notes.append(f"XSI side waveform contrast={xsi_contrast:.6g}.")
             notes.append(
-                "CAST azimuth contrast exists but is rotation-invariant without XSI evidence."
+                "Preview evidence is not sign-discriminative enough for automatic selection."
             )
         else:
             notes.append("No overlapping CAST/XSI azimuth preview evidence available.")
@@ -257,7 +270,7 @@ def _candidate_metrics(
             azimuth_max=float(np.nanmax(azimuth)) if np.asarray(azimuth).size else None,
             circular_contrast=contrast,
             score=score,
-            evidence_available=False,
+            evidence_available=evidence_available,
             notes=notes,
         )
     return metrics
@@ -364,6 +377,17 @@ def _circular_contrast(cast_zc_preview: np.ndarray) -> float | None:
     if finite_contrast.size == 0:
         return None
     return float(np.median(finite_contrast))
+
+
+def _xsi_side_contrast(xsi_waveform_preview: np.ndarray) -> float | None:
+    values = np.asarray(xsi_waveform_preview, dtype=np.float32)
+    if values.ndim != 4 or values.shape[0] == 0 or values.shape[2] == 0:
+        return None
+    side_profile = np.nanmedian(np.abs(values), axis=(0, 1, 3))
+    finite = side_profile[np.isfinite(side_profile)]
+    if finite.size == 0:
+        return None
+    return float(np.max(finite) - np.min(finite))
 
 
 def _wrap_valid(values: np.ndarray | float) -> bool:

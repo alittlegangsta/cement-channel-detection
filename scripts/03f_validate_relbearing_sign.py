@@ -36,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-report-json", default=None)
     parser.add_argument("--output-config", default="configs/alignment.relbearing.example.yaml")
     parser.add_argument("--random-seed", type=int, default=20260520)
+    parser.add_argument("--overlap-targeted", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
@@ -48,27 +49,37 @@ def main() -> int:
         preview_npz = _resolve_interim_path(
             config,
             args.depth_resample_preview_npz,
-            "depth_resample_preview_v001.npz",
+            "depth_resample_overlap_preview_v001.npz"
+            if args.overlap_targeted
+            else "depth_resample_preview_v001.npz",
         )
         small_slice_summary = _resolve_interim_path(
             config,
             args.small_slice_summary_json,
-            "small_slice_summary_v001.json",
+            "small_slice_overlap_summary_v001.json"
+            if args.overlap_targeted
+            else "small_slice_summary_v001.json",
         )
         resample_report = _resolve_report_path(
             config,
             args.depth_resample_report_json,
-            "depth_resample_preview_report.json",
+            "depth_resample_overlap_preview_report.json"
+            if args.overlap_targeted
+            else "depth_resample_preview_report.json",
         )
         output_md = _resolve_report_path(
             config,
             args.output_report_md,
-            "relbearing_sign_validation_report.md",
+            "relbearing_sign_validation_overlap_report.md"
+            if args.overlap_targeted
+            else "relbearing_sign_validation_report.md",
         )
         output_json = _resolve_report_path(
             config,
             args.output_report_json,
-            "relbearing_sign_validation_report.json",
+            "relbearing_sign_validation_overlap_report.json"
+            if args.overlap_targeted
+            else "relbearing_sign_validation_report.json",
         )
         output_config = Path(args.output_config)
         _ensure_report_output(config, output_md)

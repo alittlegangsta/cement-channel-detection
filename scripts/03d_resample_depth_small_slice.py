@@ -36,6 +36,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-report-md", default=None)
     parser.add_argument("--output-report-json", default=None)
     parser.add_argument("--max-preview-depth-samples", type=int, default=16)
+    parser.add_argument("--overlap-targeted", action="store_true")
+    parser.add_argument("--require-small-slice-overlap", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
@@ -53,7 +55,7 @@ def main() -> int:
         small_slice_npz = _resolve_interim_path(
             config,
             args.small_slice_npz,
-            "small_slice_v001.npz",
+            "small_slice_overlap_v001.npz" if args.overlap_targeted else "small_slice_v001.npz",
         )
         proposal_json = _resolve_report_path(
             config,
@@ -63,17 +65,23 @@ def main() -> int:
         output_npz = _resolve_interim_path(
             config,
             args.output_npz,
-            "depth_resample_preview_v001.npz",
+            "depth_resample_overlap_preview_v001.npz"
+            if args.overlap_targeted
+            else "depth_resample_preview_v001.npz",
         )
         output_md = _resolve_report_path(
             config,
             args.output_report_md,
-            "depth_resample_preview_report.md",
+            "depth_resample_overlap_preview_report.md"
+            if args.overlap_targeted
+            else "depth_resample_preview_report.md",
         )
         output_json = _resolve_report_path(
             config,
             args.output_report_json,
-            "depth_resample_preview_report.json",
+            "depth_resample_overlap_preview_report.json"
+            if args.overlap_targeted
+            else "depth_resample_preview_report.json",
         )
         _ensure_interim_output(config, output_npz)
         _ensure_report_output(config, output_md)
@@ -83,6 +91,7 @@ def main() -> int:
             depth_grid_proposal_json=proposal_json,
             small_slice_npz=small_slice_npz,
             max_preview_depth_samples=args.max_preview_depth_samples,
+            require_small_slice_overlap=(args.require_small_slice_overlap or args.overlap_targeted),
         )
         if not args.dry_run:
             write_depth_resample_preview_outputs(

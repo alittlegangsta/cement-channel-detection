@@ -17,8 +17,8 @@ SMALL_SLICE_VERSION = "small_slice_v001"
 SCHEMA_VERSION = "schema_v001"
 DATA_VERSION = "data_v001"
 
-MAX_DEPTH_LIMIT = 10
-MAX_TIME_LIMIT = 32
+MAX_DEPTH_LIMIT = 64
+MAX_TIME_LIMIT = 64
 MAX_RECEIVER_LIMIT = 13
 MAX_SIDE_LIMIT = 8
 MAX_CAST_AZIMUTH_LIMIT = 180
@@ -62,6 +62,25 @@ class SmallSliceLimits:
 
 
 @dataclass(frozen=True)
+class DepthWindow:
+    depth_start: float
+    depth_stop: float
+
+
+@dataclass(frozen=True)
+class DepthWindowSelection:
+    source_start_index: int
+    sample_count: int
+    matched_count: int
+    observed_min: float | None
+    observed_max: float | None
+    warnings: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class VariableSliceSummary:
     name: str
     path: str
@@ -85,6 +104,7 @@ class SmallSliceResult:
     mapping_path: str
     created_at: str
     limits: dict[str, int]
+    depth_window: dict[str, Any] | None
     source_files: dict[str, Any]
     variables: dict[str, VariableSliceSummary]
     warnings: list[str]
@@ -103,6 +123,7 @@ class MatReadRequest:
     max_depth_samples: int
     max_time_samples: int
     max_cast_azimuth: int
+    source_start_index: int = 0
 
 
 @dataclass
@@ -207,10 +228,24 @@ def read_small_slice_from_configs(
     mapping_path: Path | str,
     *,
     limits: SmallSliceLimits | None = None,
+    depth_window: DepthWindow | None = None,
+    depth_reference_npz: Path | str | None = None,
 ) -> tuple[SmallSliceResult, dict[str, np.ndarray]]:
     config = load_paths_config(paths_config)
     mapping = load_mapping_config(mapping_path)
-    return read_small_slice(config, mapping, mapping_path=Path(mapping_path), limits=limits)
+    depth_reference_arrays = (
+        load_depth_reference_arrays(depth_reference_npz)
+        if depth_reference_npz is not None
+        else None
+    )
+    return read_small_slice(
+        config,
+        mapping,
+        mapping_path=Path(mapping_path),
+        limits=limits,
+        depth_window=depth_window,
+        depth_reference_arrays=depth_reference_arrays,
+    )
 
 
 def read_small_slice(
@@ -219,6 +254,8 @@ def read_small_slice(
     *,
     mapping_path: Path | str,
     limits: SmallSliceLimits | None = None,
+    depth_window: DepthWindow | None = None,
+    depth_reference_arrays: dict[str, np.ndarray] | None = None,
 ) -> tuple[SmallSliceResult, dict[str, np.ndarray]]:
     active_limits = _validate_limits(limits or SmallSliceLimits())
     data_config = _as_dict(paths_config.get("data"))
@@ -228,15 +265,71 @@ def read_small_slice(
     arrays: dict[str, np.ndarray] = {}
     summaries: dict[str, VariableSliceSummary] = {}
     source_files: dict[str, Any] = {}
+    window_selection: dict[str, Any] | None = None
 
     if not raw_dir.exists():
         errors.append(f"Raw directory does not exist: {raw_dir}")
-        result = _result(mapping_path, active_limits, source_files, summaries, warnings, errors)
+        result = _result(
+            mapping_path,
+            active_limits,
+            window_selection,
+            source_files,
+            summaries,
+            warnings,
+            errors,
+        )
         return result, arrays
 
-    _read_cast(raw_dir, mapping, active_limits, arrays, summaries, source_files, errors)
-    _read_pose(raw_dir, mapping, active_limits, arrays, summaries, source_files, errors)
-    _read_xsi(raw_dir, mapping, active_limits, arrays, summaries, source_files, errors)
+    if depth_window is not None:
+        if depth_reference_arrays is None:
+            errors.append("depth_reference_arrays are required when depth_window is provided.")
+            result = _result(
+                mapping_path,
+                active_limits,
+                window_selection,
+                source_files,
+                summaries,
+                warnings,
+                errors,
+            )
+            return result, arrays
+        window_selection = select_depth_window_slices(
+            depth_reference_arrays,
+            depth_window,
+            max_depth_samples=active_limits.max_depth_samples,
+        )
+        warnings.extend(_window_selection_warnings(window_selection))
+
+    _read_cast(
+        raw_dir,
+        mapping,
+        active_limits,
+        window_selection,
+        arrays,
+        summaries,
+        source_files,
+        errors,
+    )
+    _read_pose(
+        raw_dir,
+        mapping,
+        active_limits,
+        window_selection,
+        arrays,
+        summaries,
+        source_files,
+        errors,
+    )
+    _read_xsi(
+        raw_dir,
+        mapping,
+        active_limits,
+        window_selection,
+        arrays,
+        summaries,
+        source_files,
+        errors,
+    )
 
     if _unit_unknown(mapping, ("cast", "depth_unit")):
         warnings.append("CAST depth unit is unknown_to_verify.")
@@ -245,7 +338,18 @@ def read_small_slice(
     if _unit_unknown(mapping, ("xsi", "depth_unit")):
         warnings.append("XSI depth unit is unknown_to_verify.")
 
-    return _result(mapping_path, active_limits, source_files, summaries, warnings, errors), arrays
+    return (
+        _result(
+            mapping_path,
+            active_limits,
+            window_selection,
+            source_files,
+            summaries,
+            warnings,
+            errors,
+        ),
+        arrays,
+    )
 
 
 def write_small_slice_outputs(
@@ -267,6 +371,100 @@ def write_small_slice_outputs(
     if output_npz is not None:
         output_npz.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(output_npz, **arrays)
+
+
+def load_depth_reference_arrays(path: Path | str) -> dict[str, np.ndarray]:
+    npz_path = Path(path)
+    if not npz_path.exists():
+        raise FileNotFoundError(f"Depth reference NPZ does not exist: {npz_path}")
+    with np.load(npz_path) as data:
+        return {key: data[key] for key in data.files}
+
+
+def depth_window_from_center(
+    *,
+    depth_center: float,
+    depth_window_size: float,
+) -> DepthWindow:
+    if depth_window_size <= 0.0:
+        raise ValueError("depth_window_size must be positive.")
+    half = depth_window_size / 2.0
+    return DepthWindow(
+        depth_start=float(depth_center - half), depth_stop=float(depth_center + half)
+    )
+
+
+def depth_window_from_grid_proposal(
+    proposal_json: Path | str,
+    *,
+    depth_window_size: float = 2.0,
+) -> DepthWindow:
+    proposal = json.loads(Path(proposal_json).read_text(encoding="utf-8"))
+    if not isinstance(proposal, dict):
+        raise ValueError(f"Depth grid proposal must contain an object: {proposal_json}")
+    start = _first_float(
+        proposal.get("common_overlap_min"),
+        proposal.get("depth_start"),
+    )
+    stop = _first_float(
+        proposal.get("common_overlap_max"),
+        proposal.get("depth_stop"),
+    )
+    if start is None or stop is None or stop <= start:
+        raise ValueError("Depth grid proposal does not define a positive common overlap.")
+    return depth_window_from_center(
+        depth_center=(start + stop) / 2.0,
+        depth_window_size=min(float(depth_window_size), 2.0),
+    )
+
+
+def select_depth_window_slices(
+    depth_reference_arrays: dict[str, np.ndarray],
+    depth_window: DepthWindow,
+    *,
+    max_depth_samples: int,
+) -> dict[str, Any]:
+    if depth_window.depth_stop <= depth_window.depth_start:
+        raise ValueError("depth_stop must be greater than depth_start.")
+    selection: dict[str, Any] = {
+        "requested": asdict(depth_window),
+        "max_depth_samples": int(max_depth_samples),
+    }
+    selection["cast"] = _select_single_depth_window(
+        np.asarray(depth_reference_arrays.get("cast_depth", [])),
+        depth_window,
+        max_depth_samples=max_depth_samples,
+        name="cast_depth",
+    ).to_dict()
+    selection["pose"] = _select_single_depth_window(
+        np.asarray(depth_reference_arrays.get("pose_depth", [])),
+        depth_window,
+        max_depth_samples=max_depth_samples,
+        name="pose_depth",
+    ).to_dict()
+    xsi = np.asarray(depth_reference_arrays.get("xsi_depth_by_receiver", []))
+    receiver_selections: dict[str, dict[str, Any]] = {}
+    if xsi.ndim == 1:
+        xsi = xsi.reshape(1, -1)
+    if xsi.ndim != 2 or xsi.size == 0:
+        receiver_selections["receiver_01"] = DepthWindowSelection(
+            source_start_index=0,
+            sample_count=0,
+            matched_count=0,
+            observed_min=None,
+            observed_max=None,
+            warnings=["xsi_depth_by_receiver is missing or not rank 2."],
+        ).to_dict()
+    else:
+        for index in range(xsi.shape[0]):
+            receiver_selections[f"receiver_{index + 1:02d}"] = _select_single_depth_window(
+                xsi[index],
+                depth_window,
+                max_depth_samples=max_depth_samples,
+                name=f"xsi_depth_receiver_{index + 1:02d}",
+            ).to_dict()
+    selection["xsi_receivers"] = receiver_selections
+    return selection
 
 
 def read_mat_file_slices(
@@ -312,6 +510,7 @@ def _read_cast(
     raw_dir: Path,
     mapping: dict[str, Any],
     limits: SmallSliceLimits,
+    window_selection: dict[str, Any] | None,
     arrays: dict[str, np.ndarray],
     summaries: dict[str, VariableSliceSummary],
     source_files: dict[str, Any],
@@ -320,24 +519,32 @@ def _read_cast(
     cast = _as_dict(mapping.get("cast"))
     path = raw_dir / str(cast.get("file", "CAST.mat"))
     source_files["cast"] = str(path)
+    selection = _selection_for_source(window_selection, "cast")
+    if selection is not None and int(selection.get("sample_count", 0)) <= 0:
+        errors.append("cast_depth has no samples in the requested depth window.")
+        return
+    depth_count = _selected_depth_count(selection, limits.max_depth_samples)
+    source_start_index = _selected_start_index(selection)
     requests = [
         MatReadRequest(
             variable_path=str(cast.get("zc_variable", "")),
             role="cast_zc",
             source_orientation=_as_str_list(cast.get("zc_source_shape_order")),
             canonical_orientation=_as_str_list(cast.get("zc_canonical_shape_order")),
-            max_depth_samples=limits.max_depth_samples,
+            max_depth_samples=depth_count,
             max_time_samples=limits.max_time_samples,
             max_cast_azimuth=limits.max_cast_azimuth,
+            source_start_index=source_start_index,
         ),
         MatReadRequest(
             variable_path=str(cast.get("depth_variable", "")),
             role="depth",
             source_orientation=_as_str_list(cast.get("depth_source_shape_order"), ["depth"]),
             canonical_orientation=["depth"],
-            max_depth_samples=limits.max_depth_samples,
+            max_depth_samples=depth_count,
             max_time_samples=limits.max_time_samples,
             max_cast_azimuth=limits.max_cast_azimuth,
+            source_start_index=source_start_index,
         ),
     ]
     _read_request_group(
@@ -356,6 +563,7 @@ def _read_pose(
     raw_dir: Path,
     mapping: dict[str, Any],
     limits: SmallSliceLimits,
+    window_selection: dict[str, Any] | None,
     arrays: dict[str, np.ndarray],
     summaries: dict[str, VariableSliceSummary],
     source_files: dict[str, Any],
@@ -365,33 +573,42 @@ def _read_pose(
     path = raw_dir / str(pose.get("file", "D2_XSI_RelBearing_Inclination.mat"))
     source_files["pose"] = str(path)
     orientation = _as_str_list(pose.get("source_shape_order"), ["depth"])
+    selection = _selection_for_source(window_selection, "pose")
+    if selection is not None and int(selection.get("sample_count", 0)) <= 0:
+        errors.append("pose_depth has no samples in the requested depth window.")
+        return
+    depth_count = _selected_depth_count(selection, limits.max_depth_samples)
+    source_start_index = _selected_start_index(selection)
     requests = [
         MatReadRequest(
             variable_path=str(pose.get("depth_variable", "")),
             role="depth",
             source_orientation=orientation,
             canonical_orientation=["depth"],
-            max_depth_samples=limits.max_depth_samples,
+            max_depth_samples=depth_count,
             max_time_samples=limits.max_time_samples,
             max_cast_azimuth=limits.max_cast_azimuth,
+            source_start_index=source_start_index,
         ),
         MatReadRequest(
             variable_path=str(pose.get("inclination_variable", "")),
             role="pose_inc",
             source_orientation=orientation,
             canonical_orientation=["depth"],
-            max_depth_samples=limits.max_depth_samples,
+            max_depth_samples=depth_count,
             max_time_samples=limits.max_time_samples,
             max_cast_azimuth=limits.max_cast_azimuth,
+            source_start_index=source_start_index,
         ),
         MatReadRequest(
             variable_path=str(pose.get("relbearing_variable", "")),
             role="pose_relbearing",
             source_orientation=orientation,
             canonical_orientation=["depth"],
-            max_depth_samples=limits.max_depth_samples,
+            max_depth_samples=depth_count,
             max_time_samples=limits.max_time_samples,
             max_cast_azimuth=limits.max_cast_azimuth,
+            source_start_index=source_start_index,
         ),
     ]
     key_by_role = {
@@ -406,6 +623,7 @@ def _read_xsi(
     raw_dir: Path,
     mapping: dict[str, Any],
     limits: SmallSliceLimits,
+    window_selection: dict[str, Any] | None,
     arrays: dict[str, np.ndarray],
     summaries: dict[str, VariableSliceSummary],
     source_files: dict[str, Any],
@@ -426,6 +644,12 @@ def _read_xsi(
     for receiver_index in range(1, receiver_count + 1):
         receiver_file = receiver_dir / f"XSILMR{receiver_index:02d}.mat"
         source_files["xsi_receiver_files"].append(str(receiver_file))
+        receiver_selection = _selection_for_xsi_receiver(window_selection, receiver_index)
+        if receiver_selection is not None and int(receiver_selection.get("sample_count", 0)) <= 0:
+            errors.append(f"xsi receiver {receiver_index}: no depth samples in requested window.")
+            continue
+        depth_count = _selected_depth_count(receiver_selection, limits.max_depth_samples)
+        source_start_index = _selected_start_index(receiver_selection)
         requests = [
             MatReadRequest(
                 variable_path=_format_pattern(
@@ -435,9 +659,10 @@ def _read_xsi(
                 role="depth",
                 source_orientation=_as_str_list(xsi.get("depth_source_shape_order"), ["depth"]),
                 canonical_orientation=["depth"],
-                max_depth_samples=limits.max_depth_samples,
+                max_depth_samples=depth_count,
                 max_time_samples=limits.max_time_samples,
                 max_cast_azimuth=limits.max_cast_azimuth,
+                source_start_index=source_start_index,
             ),
             MatReadRequest(
                 variable_path=_format_pattern(
@@ -447,7 +672,7 @@ def _read_xsi(
                 role="xsi_time",
                 source_orientation=["scalar"],
                 canonical_orientation=["receiver"],
-                max_depth_samples=limits.max_depth_samples,
+                max_depth_samples=depth_count,
                 max_time_samples=limits.max_time_samples,
                 max_cast_azimuth=limits.max_cast_azimuth,
             ),
@@ -462,26 +687,24 @@ def _read_xsi(
                 role="xsi_waveform",
                 source_orientation=_as_str_list(xsi.get("waveform_source_shape_order")),
                 canonical_orientation=_as_str_list(xsi.get("waveform_canonical_shape_order")),
-                max_depth_samples=limits.max_depth_samples,
+                max_depth_samples=depth_count,
                 max_time_samples=limits.max_time_samples,
                 max_cast_azimuth=limits.max_cast_azimuth,
+                source_start_index=source_start_index,
             )
             for side in side_labels
         )
         try:
             data = read_mat_file_slices(receiver_file, requests)
         except Exception as exc:
-            errors.append(
-                f"xsi receiver {receiver_index}: {type(exc).__name__}: {exc}"
-            )
+            errors.append(f"xsi receiver {receiver_index}: {type(exc).__name__}: {exc}")
             continue
         depth_key = requests[0].variable_path
         time_key = requests[1].variable_path
         depth_slices.append(np.asarray(data[depth_key], dtype=np.float32))
         tad_values.append(float(np.asarray(data[time_key]).reshape(-1)[0]))
         side_arrays = [
-            np.asarray(data[request.variable_path], dtype=np.float32)
-            for request in requests[2:]
+            np.asarray(data[request.variable_path], dtype=np.float32) for request in requests[2:]
         ]
         waveform_slices.append(np.stack(side_arrays, axis=1))
         depth_summaries.append(_summary(depth_key, depth_key, data[depth_key], requests[0]))
@@ -647,15 +870,17 @@ def _read_numeric_from_matrix_payload(
             f"{request.variable_path} has unsupported numeric data type {data_tag.data_type}"
         )
     dtype = np.dtype(endian + MI_NUMPY_DTYPES[data_tag.data_type])
+    skip_count = _source_skip_element_count(header.dims, request)
     read_count = _required_source_element_count(header.dims, request)
     total_count = _element_count(header.dims)
-    if read_count > total_count:
+    if skip_count + read_count > total_count:
         raise MatSliceReadError(
-            f"{request.variable_path} requested {read_count} elements from shape {header.dims}"
+            f"{request.variable_path} requested start={skip_count}, count={read_count} "
+            f"from shape {header.dims}"
         )
-    values = _read_numeric_values(payload, data_tag, dtype, read_count)
+    values = _read_numeric_values(payload, data_tag, dtype, read_count, skip_count=skip_count)
     if data_tag.inline_data is None:
-        remaining_bytes = data_tag.nbytes - (read_count * dtype.itemsize)
+        remaining_bytes = data_tag.nbytes - ((skip_count + read_count) * dtype.itemsize)
         if remaining_bytes > 0:
             payload.skip(remaining_bytes)
         _skip_padding(payload, data_tag.nbytes)
@@ -679,11 +904,16 @@ def _read_numeric_values(
     data_tag: MatDataTag,
     dtype: np.dtype,
     count: int,
+    *,
+    skip_count: int,
 ) -> np.ndarray:
     nbytes = count * dtype.itemsize
     if data_tag.inline_data is not None:
-        data = data_tag.inline_data[:nbytes]
+        start = skip_count * dtype.itemsize
+        data = data_tag.inline_data[start : start + nbytes]
     else:
+        if skip_count:
+            payload.skip(skip_count * dtype.itemsize)
         data = payload.read(nbytes)
     if len(data) != nbytes:
         raise MatSliceReadError("Numeric MAT payload ended before requested slice.")
@@ -698,13 +928,13 @@ def _canonicalize_values(
     role = request.role
     if role == "cast_zc":
         rows, cols = _matrix_rows_cols(dims)
-        depth_count = min(request.max_depth_samples, cols)
+        depth_count = _requested_depth_count(cols, request)
         azimuth_count = min(request.max_cast_azimuth, rows)
         source = values.reshape((rows, depth_count), order="F")
         return source[:azimuth_count, :].T.astype(np.float32)
     if role == "xsi_waveform":
         rows, cols = _matrix_rows_cols(dims)
-        depth_count = min(request.max_depth_samples, cols)
+        depth_count = _requested_depth_count(cols, request)
         time_count = min(request.max_time_samples, rows)
         source = values.reshape((rows, depth_count), order="F")
         return source[:time_count, :].T.astype(np.float32)
@@ -716,13 +946,29 @@ def _canonicalize_values(
 def _required_source_element_count(dims: list[int], request: MatReadRequest) -> int:
     if request.role == "cast_zc":
         rows, cols = _matrix_rows_cols(dims)
-        return rows * min(request.max_depth_samples, cols)
+        return rows * _requested_depth_count(cols, request)
     if request.role == "xsi_waveform":
         rows, cols = _matrix_rows_cols(dims)
-        return rows * min(request.max_depth_samples, cols)
+        return rows * _requested_depth_count(cols, request)
     if request.role == "xsi_time":
         return 1
-    return min(request.max_depth_samples, _element_count(dims))
+    total_count = _element_count(dims)
+    return max(min(request.max_depth_samples, total_count - request.source_start_index), 0)
+
+
+def _source_skip_element_count(dims: list[int], request: MatReadRequest) -> int:
+    start_index = max(int(request.source_start_index), 0)
+    if request.role in {"cast_zc", "xsi_waveform"}:
+        rows, _cols = _matrix_rows_cols(dims)
+        return rows * start_index
+    if request.role == "xsi_time":
+        return 0
+    return start_index
+
+
+def _requested_depth_count(source_depth_count: int, request: MatReadRequest) -> int:
+    remaining = max(source_depth_count - max(int(request.source_start_index), 0), 0)
+    return min(request.max_depth_samples, remaining)
 
 
 def _read_tag_or_none(reader: Any, endian: str) -> MatDataTag | None:
@@ -787,9 +1033,7 @@ def _decode_field_names(field_names_data: bytes, field_name_length: int) -> list
     field_count = len(field_names_data) // field_name_length
     names = []
     for index in range(field_count):
-        raw = field_names_data[
-            index * field_name_length : (index + 1) * field_name_length
-        ]
+        raw = field_names_data[index * field_name_length : (index + 1) * field_name_length]
         names.append(raw.split(b"\x00", 1)[0].decode("utf-8", errors="ignore"))
     return names
 
@@ -824,11 +1068,7 @@ def _aggregate_summary(
     orientation: list[str],
 ) -> VariableSliceSummary:
     stats = _numeric_stats(array)
-    warnings = [
-        warning
-        for summary in component_summaries
-        for warning in summary.warnings
-    ]
+    warnings = [warning for summary in component_summaries for warning in summary.warnings]
     errors = [error for summary in component_summaries for error in summary.errors]
     return VariableSliceSummary(
         name=name,
@@ -865,6 +1105,7 @@ def _numeric_stats(array: np.ndarray) -> dict[str, float | None]:
 def _result(
     mapping_path: Path | str,
     limits: SmallSliceLimits,
+    depth_window: dict[str, Any] | None,
     source_files: dict[str, Any],
     summaries: dict[str, VariableSliceSummary],
     warnings: list[str],
@@ -877,6 +1118,7 @@ def _result(
         mapping_path=str(mapping_path),
         created_at=datetime.now(timezone.utc).isoformat(),
         limits=asdict(limits),
+        depth_window=depth_window,
         source_files=source_files,
         variables=summaries,
         warnings=warnings,
@@ -896,6 +1138,117 @@ def _validate_limits(limits: SmallSliceLimits) -> SmallSliceLimits:
         if value < 1 or value > maximum:
             raise ValueError(f"{name} must be between 1 and {maximum}; observed {value}")
     return limits
+
+
+def _select_single_depth_window(
+    depth: np.ndarray,
+    depth_window: DepthWindow,
+    *,
+    max_depth_samples: int,
+    name: str,
+) -> DepthWindowSelection:
+    values = np.asarray(depth, dtype=np.float64).reshape(-1)
+    warnings: list[str] = []
+    finite = np.isfinite(values)
+    if values.size == 0 or not np.any(finite):
+        return DepthWindowSelection(
+            source_start_index=0,
+            sample_count=0,
+            matched_count=0,
+            observed_min=None,
+            observed_max=None,
+            warnings=[f"{name} has no finite depth samples for window selection."],
+        )
+    low = min(depth_window.depth_start, depth_window.depth_stop)
+    high = max(depth_window.depth_start, depth_window.depth_stop)
+    matched = np.flatnonzero(finite & (values >= low) & (values <= high))
+    if matched.size == 0:
+        finite_values = values[finite]
+        center = (low + high) / 2.0
+        nearest = int(np.flatnonzero(finite)[np.argmin(np.abs(finite_values - center))])
+        return DepthWindowSelection(
+            source_start_index=nearest,
+            sample_count=0,
+            matched_count=0,
+            observed_min=None,
+            observed_max=None,
+            warnings=[f"{name} has no samples inside depth window [{low}, {high}]."],
+        )
+    center = (low + high) / 2.0
+    center_index = int(matched[np.argmin(np.abs(values[matched] - center))])
+    matched_start = int(matched[0])
+    matched_stop_exclusive = int(matched[-1]) + 1
+    desired_count = min(int(max_depth_samples), int(matched.size))
+    half = desired_count // 2
+    start = max(matched_start, center_index - half)
+    stop = start + desired_count
+    if stop > matched_stop_exclusive:
+        stop = matched_stop_exclusive
+        start = max(matched_start, stop - desired_count)
+    observed = values[start:stop]
+    finite_observed = observed[np.isfinite(observed)]
+    return DepthWindowSelection(
+        source_start_index=int(start),
+        sample_count=int(stop - start),
+        matched_count=int(matched.size),
+        observed_min=float(np.min(finite_observed)) if finite_observed.size else None,
+        observed_max=float(np.max(finite_observed)) if finite_observed.size else None,
+        warnings=warnings,
+    )
+
+
+def _window_selection_warnings(window_selection: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    for source in ["cast", "pose"]:
+        selection = _as_dict(window_selection.get(source))
+        warnings.extend(str(item) for item in selection.get("warnings", []) if item)
+    for receiver, selection_value in _as_dict(window_selection.get("xsi_receivers")).items():
+        selection = _as_dict(selection_value)
+        warnings.extend(f"{receiver}: {item}" for item in selection.get("warnings", []) if item)
+    return warnings
+
+
+def _selection_for_source(
+    window_selection: dict[str, Any] | None,
+    source: str,
+) -> dict[str, Any] | None:
+    if window_selection is None:
+        return None
+    return _as_dict(window_selection.get(source))
+
+
+def _selection_for_xsi_receiver(
+    window_selection: dict[str, Any] | None,
+    receiver_index: int,
+) -> dict[str, Any] | None:
+    if window_selection is None:
+        return None
+    return _as_dict(
+        _as_dict(window_selection.get("xsi_receivers")).get(f"receiver_{receiver_index:02d}")
+    )
+
+
+def _selected_start_index(selection: dict[str, Any] | None) -> int:
+    if selection is None:
+        return 0
+    return max(int(selection.get("source_start_index", 0)), 0)
+
+
+def _selected_depth_count(selection: dict[str, Any] | None, fallback: int) -> int:
+    if selection is None:
+        return fallback
+    return max(int(selection.get("sample_count", 0)), 0)
+
+
+def _first_float(*values: Any) -> float | None:
+    for value in values:
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def _format_pattern(pattern: str, receiver: int, side: str | None = None) -> str:
