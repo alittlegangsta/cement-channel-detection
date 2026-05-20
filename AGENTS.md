@@ -1308,3 +1308,22 @@ Agent 应按 MVP 顺序推进，不得跳跃到深度模型。
 ## 28. 一句话原则
 
 > 先让数据可信，再让标签可信；先让物理 baseline 可信，再让深度模型可信；先让解释可信，再让结果可用。
+
+## Context Budget Rules for Codex
+
+For routine implementation tasks, do not read all documentation by default.
+
+Always read:
+- `AGENTS.md`
+- `README.md`
+
+Then read only task-relevant documents:
+- data tasks: `docs/data_contract.md`
+- workflow / Git tasks: `docs/development_workflow.md`
+- experiment tasks: `docs/experiment_protocol.md`
+- server tasks: `docs/server_runbook.md`
+- labeling tasks: `docs/labeling_protocol.md`
+- evaluation tasks: `docs/evaluation_protocol.md`
+- model tasks: `docs/model_design.md`
+
+Only open `docs/report.md` when the task affects physical principles, formulas, label rules, XSI-only leakage boundaries, or model design.
