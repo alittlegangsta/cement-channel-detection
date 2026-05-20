@@ -656,6 +656,25 @@ QC 输出无法与深度和方位对齐
 估计局部 depth lag
 ```
 
+MVP-2 的第一步必须是 depth axis audit。该 audit 只允许读取
+`CAST.Depth`、`XSILMR{receiver}.Depth` 和 `Depth_inc`，输出：
+
+```text
+depth_axis_audit_report.md
+depth_axis_audit_report.json
+```
+
+Depth audit Go 条件：
+
+```text
+CAST / XSI / pose 三套 depth 轴存在共同 overlap
+depth 基本递增
+无严重 NaN / Inf
+XSI receiver depth 轴大体一致
+```
+
+若只有 depth unit 未确认，可为 `conditional_go`，但必须记录 warning。
+
 必须输出：
 
 ```text

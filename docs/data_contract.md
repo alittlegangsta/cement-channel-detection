@@ -568,6 +568,31 @@ orientation_uncertain = true
 
 深度错位估计的单位必须与 `/axis/depth` 一致。
 
+#### 7.4.1 MVP-2 depth axis audit artifacts
+
+MVP-2 进入正式插值或标签前，必须先生成 depth-only 审计报告：
+
+```text
+/home/xiaoj/cement-channel-data/reports/depth_axis_audit_report.md
+/home/xiaoj/cement-channel-data/reports/depth_axis_audit_report.json
+```
+
+该报告只允许读取 `CAST.Depth`、`XSILMR{receiver}.Depth` 和 `Depth_inc`，
+不得读取完整 XSI waveform 或完整 `CAST.Zc`。报告至少记录：
+
+```text
+cast_depth length/min/max/monotonic/median_step/nan_count/duplicate_count
+xsi_depth per receiver length/min/max/monotonic/median_step/nan_count/duplicate_count
+pose_depth length/min/max/monotonic/median_step/nan_count/duplicate_count
+receiver-to-receiver depth consistency
+common overlap interval
+candidate canonical depth grid
+warnings/errors/no-go blockers
+```
+
+如果 depth unit 仍为 `unknown_to_verify`，MVP-2 可保留 `conditional_go`，
+但必须在报告 warning 中记录并等待人工复核。
+
 ---
 
 ### 7.5 `/quality`
