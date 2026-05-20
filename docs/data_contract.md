@@ -622,6 +622,29 @@ warnings/errors/no-go blockers
 warning；若 `depth_start`、`depth_stop` 或 `depth_step` 无法明确计算，则为
 `no_go`，不得进入插值预览。
 
+#### 7.4.3 MVP-2 controlled depth-only reader artifacts
+
+Depth grid proposal 明确后，MVP-2 可生成 depth-only / pose-only 受控读取结果：
+
+```text
+/home/xiaoj/cement-channel-data/interim/depth_only_v001.npz
+/home/xiaoj/cement-channel-data/interim/depth_only_summary_v001.json
+```
+
+该文件只允许包含：
+
+```text
+cast_depth
+xsi_depth_by_receiver
+pose_depth
+inc_deg
+relbearing_deg
+```
+
+该阶段不得读取或保存 XSI waveform、完整 `CAST.Zc`、弱标签、特征或模型输入。
+summary JSON 必须记录 shape、dtype、finite ratio、范围、warnings/errors 和
+`not_performed`。
+
 ---
 
 ### 7.5 `/quality`
