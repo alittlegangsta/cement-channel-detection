@@ -723,6 +723,19 @@ relbearing_sign_validation_overlap_report.md/json
 Stage 6b 仍不得选择最终 RelBearing sign；如果 plus/minus 仍无法区分，必须继续
 `insufficient_evidence` 并要求人工确认或 dual-sign / ablation。
 
+Stage 7 可在 RelBearing 符号仍未确认时继续执行 orientation confidence 生成，因为
+该 mask 只依赖 `Inc`，不依赖 plus/minus 约定。默认阈值为 `I_min_deg=1.0`、
+`I_stable_deg=5.0`：`Inc <= I_min_deg` 置信度为 0，`Inc >= I_stable_deg`
+置信度为 1，中间采用线性过渡。输出必须包含：
+
+```text
+orientation_confidence_v001.npz
+orientation_confidence_report.md
+orientation_confidence_report.json
+```
+
+报告必须明确写出 orientation confidence 与 RelBearing sign 无关。
+
 Go 条件：
 
 ```text

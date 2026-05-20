@@ -719,6 +719,48 @@ Overlap-targeted RelBearing validation 可额外输出：
 即使 overlap-targeted preview 有 CAST/XSI 小片段证据，若 plus/minus 仍无法区分，
 decision 必须保持 `insufficient_evidence`，不得自动写入正式 alignment 配置。
 
+#### 7.4.6 MVP-2 orientation confidence artifacts
+
+RelBearing plus/minus 符号未确认时，仍可独立基于 `Inc` 生成高边方向稳定性
+mask。该阶段输入仅为受控 depth-only 输出：
+
+```text
+/home/xiaoj/cement-channel-data/interim/depth_only_v001.npz
+```
+
+输出：
+
+```text
+/home/xiaoj/cement-channel-data/interim/orientation_confidence_v001.npz
+/home/xiaoj/cement-channel-data/reports/orientation_confidence_report.md
+/home/xiaoj/cement-channel-data/reports/orientation_confidence_report.json
+```
+
+`orientation_confidence_v001.npz` 必须至少包含：
+
+```text
+pose_depth
+inc_deg
+orientation_confidence
+low_inc_mask
+stable_inc_mask
+orientation_uncertain
+```
+
+默认阈值：
+
+```text
+I_min_deg = 1.0
+I_stable_deg = 5.0
+Inc <= I_min_deg      -> orientation_confidence = 0
+Inc >= I_stable_deg   -> orientation_confidence = 1
+I_min < Inc < I_stable -> linear transition
+```
+
+报告必须记录 Inc min/max/mean、low-inclination 样本比例、stable-inclination
+样本比例、orientation confidence 分布、warnings/errors，并明确该 mask 与
+RelBearing plus/minus sign 无关。
+
 ---
 
 ### 7.5 `/quality`
