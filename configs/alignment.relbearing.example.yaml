@@ -1,0 +1,16 @@
+schema_version: schema_v001
+alignment_config_version: alignment_relbearing_v001
+status: requires_human_confirmation
+selected_convention: unconfirmed
+allowed_candidate_conventions:
+- plus
+- minus
+- no_rotation
+- random_rotation
+manual_confirmation_required: true
+mvp3_allowed_without_confirmation: false
+validation_decision: insufficient_evidence
+confidence: 0.0
+notes:
+- Do not use this config as a final alignment sign until expert confirmation.
+- If proceeding later under protocol, run dual-sign or sign-ablation experiments.

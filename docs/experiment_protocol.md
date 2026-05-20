@@ -694,6 +694,19 @@ no rotation
 random rotation
 ```
 
+MVP-2 RelBearing sign validation 必须输出：
+
+```text
+relbearing_sign_validation_report.md
+relbearing_sign_validation_report.json
+configs/alignment.relbearing.example.yaml
+```
+
+若 small-slice 中没有可用的 CAST/XSI 共同方位证据，或 plus/minus 与
+no-rotation/random-rotation 无法区分，validation decision 必须为
+`insufficient_evidence`，不得硬选符号，不得进入正式 alignment 或 MVP-3，除非人工确认
+或后续明确批准 dual-sign / ablation 协议。
+
 Go 条件：
 
 ```text
