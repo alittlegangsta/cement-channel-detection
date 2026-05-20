@@ -593,6 +593,35 @@ warnings/errors/no-go blockers
 如果 depth unit 仍为 `unknown_to_verify`，MVP-2 可保留 `conditional_go`，
 但必须在报告 warning 中记录并等待人工复核。
 
+#### 7.4.2 MVP-2 canonical depth grid proposal artifacts
+
+Depth audit 通过或 `conditional_go` 后，必须生成受控验证用 canonical depth grid
+proposal：
+
+```text
+/home/xiaoj/cement-channel-data/reports/depth_grid_proposal.md
+/home/xiaoj/cement-channel-data/reports/depth_grid_proposal.json
+configs/alignment.depth_grid.example.yaml
+```
+
+该阶段只允许读取 `depth_axis_audit_report.json`，不得读取 MAT、waveform 或
+`CAST.Zc`。proposal 必须记录：
+
+```text
+common_overlap_min/max
+depth_start/depth_stop
+depth_step
+sample_count
+grid_order = increasing
+allow_extrapolation = false
+step selection rationale
+warnings/errors/no-go blockers
+```
+
+若不同来源的 median depth step 差异较大，可以继续输出保守 grid，但必须记录
+warning；若 `depth_start`、`depth_stop` 或 `depth_step` 无法明确计算，则为
+`no_go`，不得进入插值预览。
+
 ---
 
 ### 7.5 `/quality`
