@@ -138,6 +138,79 @@ MVP-1 允许基于 `mat_metadata_v001.json` 生成 raw metadata audit report 和
 - `configs/raw_variable_mapping.example.yaml` 可提交 Git；
 - `configs/raw_variable_mapping.yaml` 应由人工复制、确认后作为本地私有配置使用，不应提交 Git。
 
+#### 3.1.3 受控 MATLAB struct 字段探查
+
+当 `mat_metadata_v001.json` 显示关键数据藏在 MATLAB 顶层 struct 中时，MVP-1 允许执行受控 struct 字段探查。
+
+约束：
+
+- MATLAB v5 / v7 文件只允许使用 `scipy.io.loadmat(variable_names=[...])` 加载指定 top-level variable；
+- 必须限制文件数量、每文件变量数量、字段递归深度和数组 preview 元素数量；
+- 只保存字段路径、shape、dtype / class、element_count、role hint 和少量 preview stats；
+- 不保存完整数组，不做 QC、alignment、RelBearing 旋转、label 或 HDF5 生成；
+- 单个文件探查失败必须写入结构化 errors，不得中断整个探查流程。
+
+#### 3.1.4 Raw 变量映射建议草稿
+
+MVP-1 允许基于 `mat_struct_probe_v001.json` 生成 raw variable mapping suggestions 和
+`configs/raw_variable_mapping.draft.yaml`，用于辅助人工确认后续 small-slice reader 的变量路径。
+
+约束：
+
+- 该步骤只读取 struct probe JSON，不重新打开 `.mat` 文件；
+- 每个建议必须包含 confidence 和 reason；
+- 无法可靠推荐的字段必须保留 `TODO_CONFIRM`；
+- `configs/raw_variable_mapping.draft.yaml` 是临时草稿，不应提交 Git；
+- `configs/raw_variable_mapping.yaml` 只能由人工确认后创建，并且不应提交 Git；
+- 在人工确认 `configs/raw_variable_mapping.yaml` 之前，不得进入 controlled small-slice MAT reader。
+
+#### 3.1.5 受控 small-slice MAT 读取
+
+人工确认 `configs/raw_variable_mapping.yaml` 后，MVP-1 允许读取极小 MAT 片段，用于验证变量路径、
+shape、dtype、单位和数值范围。
+
+约束：
+
+- 默认读取不超过 10 个 depth sample、32 个 time sample、13 个 receiver、8 个 side 和 180 个 CAST 方位；
+- MATLAB v5 / v7 compressed struct 必须使用受控解析或等价机制，只 materialize 小片段数组；
+- 输出仅允许写入外部数据目录的 `interim/`，不得提交 Git；
+- 允许生成 `small_slice_summary_v001.json` 和极小 `small_slice_v001.npz`；
+- CAST `Zc` 若源顺序为 `[cast_azimuth, depth]`，small-slice canonical 建议为 `[depth, cast_azimuth]`；
+- XSI waveform 若源顺序为 `[time, depth]`，small-slice canonical 建议为 `[depth, time]`；
+- 不做正式插值、depth alignment、RelBearing 旋转、label 或训练数据生成。
+
+#### 3.1.6 Tiny HDF5 prototype
+
+MVP-1 允许基于 `small_slice_v001.npz` 生成 tiny HDF5 prototype，用于验证最小 HDF5 schema。
+
+约束：
+
+- 输入只能是 Stage 7 small slice，不得重新读取 `.mat`；
+- `/aligned/xsi_waveform` 使用 canonical `[depth, receiver, side, time]`；
+- `/aligned/cast_zc` 使用 canonical `[depth, cast_azimuth]`；
+- 如果 depth 轴不一致，只记录 warning，不做 depth alignment；
+- 如果 time 单位未知，可以写入 `/axis/time_sample_index` 代替 `/axis/time_ms`；
+- 输出写入外部数据目录的 `processed/`，不得提交 Git；
+- 不做 RelBearing 旋转、label、feature extraction 或 model training。
+
+#### 3.1.7 MVP-1 initial QC skeleton
+
+MVP-1 允许在 tiny slice / tiny HDF5 上运行初始 QC skeleton。
+
+允许范围：
+
+- shape check、finite / NaN / Inf / zero ratio；
+- simple clipping-like ratio；
+- min / max / mean / std；
+- CAST Zc、XSI waveform、Inc 和 RelBearing 的基础 range summary；
+- 结构化 warnings / errors。
+
+禁止范围：
+
+- STC、APES、复杂首波拾取；
+- depth alignment、RelBearing 旋转；
+- label generation、feature extraction 或 model training。
+
 ---
 
 ### 3.2 中间数据
