@@ -645,6 +645,31 @@ relbearing_deg
 summary JSON 必须记录 shape、dtype、finite ratio、范围、warnings/errors 和
 `not_performed`。
 
+#### 7.4.4 MVP-2 small-slice depth resampling preview artifacts
+
+Controlled depth-only reader 与 depth grid proposal 均可用后，可生成小片段插值预览：
+
+```text
+/home/xiaoj/cement-channel-data/interim/depth_resample_preview_v001.npz
+/home/xiaoj/cement-channel-data/reports/depth_resample_preview_report.md
+/home/xiaoj/cement-channel-data/reports/depth_resample_preview_report.json
+```
+
+该阶段只验证数据能否映射到 proposed canonical depth grid，不得保存正式
+aligned HDF5。允许内容包括：
+
+```text
+canonical_depth
+source index on grid for CAST / pose / XSI receiver depth
+pose Inc / RelBearing interpolation preview
+small-slice CAST.Zc interpolation preview, only when small-slice depth overlaps the grid
+small-slice XSI waveform interpolation preview, only when small-slice depth overlaps the grid
+valid masks and interpolation NaN / extrapolation statistics
+```
+
+默认禁止外推；若 small-slice 的 CAST / XSI 首段不覆盖 proposed grid，只能记录
+`skipped_no_common_overlap` warning，不得读取全量 waveform 或 full `CAST.Zc` 来补齐。
+
 ---
 
 ### 7.5 `/quality`
