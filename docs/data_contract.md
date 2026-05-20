@@ -179,6 +179,20 @@ shape、dtype、单位和数值范围。
 - XSI waveform 若源顺序为 `[time, depth]`，small-slice canonical 建议为 `[depth, time]`；
 - 不做正式插值、depth alignment、RelBearing 旋转、label 或训练数据生成。
 
+#### 3.1.6 Tiny HDF5 prototype
+
+MVP-1 允许基于 `small_slice_v001.npz` 生成 tiny HDF5 prototype，用于验证最小 HDF5 schema。
+
+约束：
+
+- 输入只能是 Stage 7 small slice，不得重新读取 `.mat`；
+- `/aligned/xsi_waveform` 使用 canonical `[depth, receiver, side, time]`；
+- `/aligned/cast_zc` 使用 canonical `[depth, cast_azimuth]`；
+- 如果 depth 轴不一致，只记录 warning，不做 depth alignment；
+- 如果 time 单位未知，可以写入 `/axis/time_sample_index` 代替 `/axis/time_ms`；
+- 输出写入外部数据目录的 `processed/`，不得提交 Git；
+- 不做 RelBearing 旋转、label、feature extraction 或 model training。
+
 ---
 
 ### 3.2 中间数据
