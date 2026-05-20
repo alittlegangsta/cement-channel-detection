@@ -670,6 +670,24 @@ valid masks and interpolation NaN / extrapolation statistics
 默认禁止外推；若 small-slice 的 CAST / XSI 首段不覆盖 proposed grid，只能记录
 `skipped_no_common_overlap` warning，不得读取全量 waveform 或 full `CAST.Zc` 来补齐。
 
+#### 7.4.5 MVP-2 RelBearing angle utilities
+
+RelBearing 方位归一化必须先实现独立、可测试的角度工具，再进入符号验证：
+
+```text
+wrap_deg(theta) -> [0, 360)
+circular_distance_deg(theta_a, theta_b)
+circular_mean_deg(theta, weights)
+theta_aligned_plus  = (theta_raw + RelBearing) mod 360
+theta_aligned_minus = (theta_raw - RelBearing) mod 360
+theta_no_rotation   = theta_raw mod 360
+orientation_confidence from Inc
+orientation_uncertain low-inc mask
+```
+
+此阶段不得选择最终 plus/minus 符号，不得生成标签。若 Side A 的物理零度未确认，
+`xsi_side_azimuth_deg` 仍必须来自配置或显式候选，不得在正式 alignment 中硬编码。
+
 ---
 
 ### 7.5 `/quality`
