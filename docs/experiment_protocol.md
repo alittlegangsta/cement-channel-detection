@@ -1559,6 +1559,21 @@ XSI-only 输入 CAST
 
 ---
 
+## 22. MVP-1 Gate Report
+
+MVP-1 完成前应生成 gate report，汇总 manifest、MAT metadata、struct probe、raw variable
+mapping、small slice、tiny HDF5 和 initial QC skeleton 的状态。
+
+Go / No-Go 原则：
+
+- 任一输入缺失、schema validation error、small slice error、tiny HDF5 error 或 QC error
+  均为 `no_go`；
+- 若只有 depth unit unknown、time unit unknown 或 tiny prototype 未做正式 alignment 等不确定性，
+  可为 `conditional_go`；
+- `go` 或 `conditional_go` 只允许进入 MVP-2 的对齐与方位归一化阶段，不允许跳到 label 或模型训练。
+
+---
+
 ## 22. 当前阶段建议实验顺序
 
 当前项目处于工程骨架与 MVP-1 准备阶段。
