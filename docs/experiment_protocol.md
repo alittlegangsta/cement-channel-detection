@@ -723,6 +723,29 @@ relbearing_sign_validation_overlap_report.md/json
 Stage 6b 仍不得选择最终 RelBearing sign；如果 plus/minus 仍无法区分，必须继续
 `insufficient_evidence` 并要求人工确认或 dual-sign / ablation。
 
+人工文档确认信息可作为 MVP-2 gate 的条件依据，但不能替代数据验证。Halliburton
+RB / Relative Bearing 文档通常表示 tool key / tool reference 相对于 borehole
+high side 的顺时针角度，looking downhole 测量。因此在 raw side azimuth 以
+tool key 为 `0°`、且 looking-downhole 顺时针增加的假设下，文档优先公式为：
+
+```text
+theta_aligned = (theta_raw + RelBearing) mod 360
+```
+
+当前 MVP-2 RelBearing 结论必须写为：
+
+```text
+relbearing_sign_status: documentation_preferred_plus_data_unresolved
+documentation_preferred_sign: plus
+data_driven_validation: insufficient_evidence
+single_sign_alignment_approved: false
+approved_downstream_mode: plus_primary_minus_ablation
+```
+
+不得写成 `confirmed_plus`。Side A-H 相对 tool key 的顺序和导出矩阵 /
+图像的 looking-uphole / looking-downhole 方向仍未独立确认。MVP-3 若被 gate
+允许，也只能在 plus-primary / minus-ablation workflow 下继续。
+
 Stage 7 可在 RelBearing 符号仍未确认时继续执行 orientation confidence 生成，因为
 该 mask 只依赖 `Inc`，不依赖 plus/minus 约定。默认阈值为 `I_min_deg=1.0`、
 `I_stable_deg=5.0`：`Inc <= I_min_deg` 置信度为 0，`Inc >= I_stable_deg`
@@ -736,10 +759,19 @@ orientation_confidence_report.json
 
 报告必须明确写出 orientation confidence 与 RelBearing sign 无关。
 
+MVP-2 gate report 必须汇总 depth audit、depth grid proposal、depth-only reader、
+overlap-targeted resampling、RelBearing validation overlap report 和 orientation
+confidence report。若所有对齐工程 artifact 可用、无 blocking errors，且 RelBearing
+状态为 `documentation_preferred_plus_data_unresolved`，decision 为
+`conditional_go`。该 conditional go 只允许 MVP-3 的 plus-primary / minus-ablation
+弱标签审计准备，不允许 single-sign production alignment、直接生成最终弱标签、
+feature extraction 或 model training。
+
 Go 条件：
 
 ```text
-至少一个 RelBearing 符号明显优于未旋转
+RelBearing 符号由数据明显确认，或 gate 明确批准 documentation-preferred plus
+  primary / minus ablation 的 conditional workflow
 低井斜段被标记 uncertain
 局部 depth lag 有记录
 方位坐标在 [0, 360)
@@ -748,10 +780,11 @@ Go 条件：
 No-Go 条件：
 
 ```text
-RelBearing 正负号无法区分
+RelBearing 正负号无法区分且没有文档优先 plus / dual-sign ablation 的明确限制
 对齐后相关性不提升
 低井斜段未处理
 深度错位严重且无置信度标记
+任何 single-sign production alignment 被错误批准
 ```
 
 ---

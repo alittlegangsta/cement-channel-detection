@@ -17,6 +17,25 @@ from cement_channel.alignment.azimuth_normalization import (
 
 RELBEARING_VALIDATION_VERSION = "relbearing_sign_validation_v001"
 CANDIDATES = ["plus", "minus", "no_rotation", "random_rotation"]
+DOCUMENTATION_PREFERRED_CONCLUSION: dict[str, Any] = {
+    "relbearing_sign_status": "documentation_preferred_plus_data_unresolved",
+    "documentation_preferred_sign": "plus",
+    "documentation_formula": "theta_aligned = (theta_raw + RelBearing) mod 360",
+    "data_driven_validation": "insufficient_evidence",
+    "single_sign_alignment_approved": False,
+    "approved_downstream_mode": "plus_primary_minus_ablation",
+    "documentation_basis": (
+        "Halliburton Relative Bearing documentation suggests a plus convention when raw side "
+        "azimuth is clockwise from tool key and measured looking downhole."
+    ),
+    "unconfirmed_assumptions": [
+        "Side A-H ordering relative to tool key has not been independently confirmed.",
+        "Exported matrix or image orientation may still include looking-uphole / looking-downhole "
+        "flips.",
+        "Data-driven plus/minus/no/random metrics are not sign-discriminative in the current "
+        "small-slice evidence.",
+    ],
+}
 
 
 @dataclass(frozen=True)
@@ -42,6 +61,7 @@ class RelBearingValidationReport:
     decision: str
     selected_convention: str | None
     confidence: float
+    convention_conclusion: dict[str, Any]
     candidate_metrics: dict[str, RelBearingCandidateMetrics]
     orientation_confidence_summary: dict[str, float | int | None]
     aligned_azimuth_preview: dict[str, Any]
@@ -59,6 +79,7 @@ class RelBearingValidationReport:
             "decision": self.decision,
             "selected_convention": self.selected_convention,
             "confidence": self.confidence,
+            "convention_conclusion": self.convention_conclusion,
             "candidate_metrics": {
                 key: value.to_dict() for key, value in self.candidate_metrics.items()
             },
@@ -123,6 +144,7 @@ def validate_relbearing_sign(
         decision=decision,
         selected_convention=selected,
         confidence=confidence,
+        convention_conclusion=dict(DOCUMENTATION_PREFERRED_CONCLUSION),
         candidate_metrics=candidate_metrics,
         orientation_confidence_summary=orientation_summary,
         aligned_azimuth_preview=aligned_preview,
@@ -155,9 +177,33 @@ def format_relbearing_validation_markdown(report: RelBearingValidationReport) ->
         f"- Manual confirmation required: {data['manual_confirmation_required']}",
         f"- MVP-3 allowed without confirmation: {data['mvp3_allowed_without_confirmation']}",
         "",
-        "## Candidate Metrics",
+        "## Convention Conclusion",
         "",
     ]
+    conclusion = data["convention_conclusion"]
+    lines.extend(
+        [
+            f"- RelBearing sign status: {conclusion['relbearing_sign_status']}",
+            f"- Documentation preferred sign: {conclusion['documentation_preferred_sign']}",
+            f"- Formula: {conclusion['documentation_formula']}",
+            f"- Data-driven validation: {conclusion['data_driven_validation']}",
+            (
+                "- Single-sign alignment approved: "
+                f"{conclusion['single_sign_alignment_approved']}"
+            ),
+            f"- Approved downstream mode: {conclusion['approved_downstream_mode']}",
+            f"- Documentation basis: {conclusion['documentation_basis']}",
+            "- Unconfirmed assumptions:",
+        ]
+    )
+    lines.extend(f"  - {item}" for item in conclusion["unconfirmed_assumptions"])
+    lines.extend(
+        [
+            "",
+            "## Candidate Metrics",
+            "",
+        ]
+    )
     for key, metric in data["candidate_metrics"].items():
         lines.append(
             f"- {key}: wrap_valid={metric['wrap_valid']}, "
@@ -180,19 +226,30 @@ def format_relbearing_validation_markdown(report: RelBearingValidationReport) ->
 
 
 def relbearing_config_dict(report: RelBearingValidationReport) -> dict[str, Any]:
+    conclusion = report.convention_conclusion
     return {
         "schema_version": "schema_v001",
         "alignment_config_version": "alignment_relbearing_v001",
         "status": "requires_human_confirmation",
         "selected_convention": report.selected_convention or "unconfirmed",
+        "relbearing_sign_status": conclusion["relbearing_sign_status"],
+        "documentation_preferred_sign": conclusion["documentation_preferred_sign"],
+        "documentation_formula": conclusion["documentation_formula"],
+        "data_driven_validation": conclusion["data_driven_validation"],
+        "single_sign_alignment_approved": conclusion["single_sign_alignment_approved"],
+        "approved_downstream_mode": conclusion["approved_downstream_mode"],
+        "documentation_basis": conclusion["documentation_basis"],
+        "unconfirmed_assumptions": conclusion["unconfirmed_assumptions"],
         "allowed_candidate_conventions": CANDIDATES,
         "manual_confirmation_required": report.manual_confirmation_required,
         "mvp3_allowed_without_confirmation": report.mvp3_allowed_without_confirmation,
         "validation_decision": report.decision,
         "confidence": report.confidence,
         "notes": [
-            "Do not use this config as a final alignment sign until expert confirmation.",
-            "If proceeding later under protocol, run dual-sign or sign-ablation experiments.",
+            "Do not mark plus as data-confirmed or production-approved.",
+            "MVP-3 may proceed only with plus as documentation-preferred primary and minus as "
+            "ablation/control.",
+            "Do not use this config for single-sign production alignment.",
         ],
     }
 

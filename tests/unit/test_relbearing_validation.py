@@ -51,6 +51,12 @@ def test_validate_relbearing_sign_reports_insufficient_evidence(tmp_path: Path) 
     assert report.selected_convention is None
     assert report.manual_confirmation_required is True
     assert report.mvp3_allowed_without_confirmation is False
+    assert (
+        report.convention_conclusion["relbearing_sign_status"]
+        == "documentation_preferred_plus_data_unresolved"
+    )
+    assert report.convention_conclusion["documentation_preferred_sign"] == "plus"
+    assert report.convention_conclusion["single_sign_alignment_approved"] is False
     assert all(metric.wrap_valid for metric in report.candidate_metrics.values())
 
 
@@ -65,5 +71,10 @@ def test_relbearing_config_requires_confirmation(tmp_path: Path) -> None:
     config = relbearing_config_dict(report)
 
     assert config["selected_convention"] == "unconfirmed"
+    assert config["relbearing_sign_status"] == "documentation_preferred_plus_data_unresolved"
+    assert config["documentation_preferred_sign"] == "plus"
+    assert config["data_driven_validation"] == "insufficient_evidence"
+    assert config["single_sign_alignment_approved"] is False
+    assert config["approved_downstream_mode"] == "plus_primary_minus_ablation"
     assert config["manual_confirmation_required"] is True
     assert config["mvp3_allowed_without_confirmation"] is False

@@ -719,6 +719,28 @@ Overlap-targeted RelBearing validation 可额外输出：
 即使 overlap-targeted preview 有 CAST/XSI 小片段证据，若 plus/minus 仍无法区分，
 decision 必须保持 `insufficient_evidence`，不得自动写入正式 alignment 配置。
 
+Halliburton RB / Relative Bearing 文档定义下，若 raw side azimuth 以 tool key 为
+`0°`，且 looking downhole 顺时针增加，则文档优先公式为：
+
+```text
+theta_aligned = (theta_raw + RelBearing) mod 360
+```
+
+MVP-2 当前状态必须记录为：
+
+```text
+relbearing_sign_status: documentation_preferred_plus_data_unresolved
+documentation_preferred_sign: plus
+data_driven_validation: insufficient_evidence
+single_sign_alignment_approved: false
+approved_downstream_mode: plus_primary_minus_ablation
+```
+
+该状态不等同于 `confirmed_plus`。Side A-H 相对 tool key 的顺序尚未独立确认，
+导出矩阵 / 图像方向仍可能存在 looking-uphole / looking-downhole 翻转，因此不得生成
+single-sign production alignment。后续只能以 documentation-preferred plus 为主候选、
+minus 为对照消融的 dual-sign / ablation 模式进入下一阶段。
+
 #### 7.4.6 MVP-2 orientation confidence artifacts
 
 RelBearing plus/minus 符号未确认时，仍可独立基于 `Inc` 生成高边方向稳定性
@@ -760,6 +782,24 @@ I_min < Inc < I_stable -> linear transition
 报告必须记录 Inc min/max/mean、low-inclination 样本比例、stable-inclination
 样本比例、orientation confidence 分布、warnings/errors，并明确该 mask 与
 RelBearing plus/minus sign 无关。
+
+#### 7.4.7 MVP-2 gate report artifacts
+
+MVP-2 完成 depth audit、depth grid proposal、depth-only reader、overlap-targeted
+resampling、RelBearing validation 和 orientation confidence 后，必须生成：
+
+```text
+/home/xiaoj/cement-channel-data/reports/mvp2_gate_report.md
+/home/xiaoj/cement-channel-data/reports/mvp2_gate_report.json
+```
+
+若 depth axes valid、depth grid exists、depth-only reader works、overlap-targeted
+resampling works、orientation confidence exists，且 RelBearing 状态为
+`documentation_preferred_plus_data_unresolved`，gate decision 必须为
+`conditional_go`。该 conditional go 只允许进入 MVP-3 的
+`plus_primary_minus_ablation` workflow，不允许 single-sign production alignment、
+直接生成最终弱标签、feature extraction 或 model training。若存在 blocking errors，
+decision 必须为 `no_go`。
 
 ---
 

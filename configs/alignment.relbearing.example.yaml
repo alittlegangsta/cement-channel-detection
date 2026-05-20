@@ -2,6 +2,20 @@ schema_version: schema_v001
 alignment_config_version: alignment_relbearing_v001
 status: requires_human_confirmation
 selected_convention: unconfirmed
+relbearing_sign_status: documentation_preferred_plus_data_unresolved
+documentation_preferred_sign: plus
+documentation_formula: theta_aligned = (theta_raw + RelBearing) mod 360
+data_driven_validation: insufficient_evidence
+single_sign_alignment_approved: false
+approved_downstream_mode: plus_primary_minus_ablation
+documentation_basis: Halliburton Relative Bearing documentation suggests a plus convention
+  when raw side azimuth is clockwise from tool key and measured looking downhole.
+unconfirmed_assumptions:
+- Side A-H ordering relative to tool key has not been independently confirmed.
+- Exported matrix or image orientation may still include looking-uphole / looking-downhole
+  flips.
+- Data-driven plus/minus/no/random metrics are not sign-discriminative in the current
+  small-slice evidence.
 allowed_candidate_conventions:
 - plus
 - minus
@@ -12,5 +26,7 @@ mvp3_allowed_without_confirmation: false
 validation_decision: insufficient_evidence
 confidence: 0.0
 notes:
-- Do not use this config as a final alignment sign until expert confirmation.
-- If proceeding later under protocol, run dual-sign or sign-ablation experiments.
+- Do not mark plus as data-confirmed or production-approved.
+- MVP-3 may proceed only with plus as documentation-preferred primary and minus as
+  ablation/control.
+- Do not use this config for single-sign production alignment.
