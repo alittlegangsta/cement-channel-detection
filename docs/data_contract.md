@@ -164,6 +164,21 @@ MVP-1 允许基于 `mat_struct_probe_v001.json` 生成 raw variable mapping sugg
 - `configs/raw_variable_mapping.yaml` 只能由人工确认后创建，并且不应提交 Git；
 - 在人工确认 `configs/raw_variable_mapping.yaml` 之前，不得进入 controlled small-slice MAT reader。
 
+#### 3.1.5 受控 small-slice MAT 读取
+
+人工确认 `configs/raw_variable_mapping.yaml` 后，MVP-1 允许读取极小 MAT 片段，用于验证变量路径、
+shape、dtype、单位和数值范围。
+
+约束：
+
+- 默认读取不超过 10 个 depth sample、32 个 time sample、13 个 receiver、8 个 side 和 180 个 CAST 方位；
+- MATLAB v5 / v7 compressed struct 必须使用受控解析或等价机制，只 materialize 小片段数组；
+- 输出仅允许写入外部数据目录的 `interim/`，不得提交 Git；
+- 允许生成 `small_slice_summary_v001.json` 和极小 `small_slice_v001.npz`；
+- CAST `Zc` 若源顺序为 `[cast_azimuth, depth]`，small-slice canonical 建议为 `[depth, cast_azimuth]`；
+- XSI waveform 若源顺序为 `[time, depth]`，small-slice canonical 建议为 `[depth, time]`；
+- 不做正式插值、depth alignment、RelBearing 旋转、label 或训练数据生成。
+
 ---
 
 ### 3.2 中间数据
