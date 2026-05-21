@@ -247,8 +247,19 @@ def summarize_array(name: str, values: np.ndarray) -> ArraySummary:
     array = np.asarray(values)
     if array.dtype == np.bool_:
         numeric = array.astype(np.float32)
-    else:
+    elif np.issubdtype(array.dtype, np.number):
         numeric = array.astype(np.float64, copy=False)
+    else:
+        return ArraySummary(
+            name=name,
+            shape=[int(item) for item in array.shape],
+            dtype=str(array.dtype),
+            finite_ratio=None,
+            nan_count=0,
+            min=None,
+            max=None,
+            mean=None,
+        )
     finite = np.isfinite(numeric)
     finite_values = numeric[finite]
     if numeric.size == 0 or finite_values.size == 0:
