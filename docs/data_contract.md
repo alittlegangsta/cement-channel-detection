@@ -410,6 +410,32 @@ shape：
 [side]
 ```
 
+MVP-2C 人工确认后的当前项目约定：
+
+```text
+side_a_aligned_with_cast_0deg = true
+side_a_offset_deg = 0.0
+side_a_offset_status = manually_confirmed
+xsi_side_order = clockwise
+xsi_side_order_status = manually_confirmed
+cast_azimuth_direction = normal
+cast_azimuth_values = 0,2,4,...,358
+cast_azimuth_direction_status = manually_confirmed
+```
+
+XSI 工具几何必须记录在配置或 metadata 中。当前人工确认几何为：
+
+```text
+receiver_count = 13
+reference_receiver_index = 7
+receiver_spacing_ft = 0.5
+source_to_receiver1_ft = 1.0
+source_to_reference_receiver_ft = 4.0
+receiver_offsets_from_R7_ft:
+  R1=-3.0, R2=-2.5, R3=-2.0, R4=-1.5, R5=-1.0, R6=-0.5,
+  R7=0.0, R8=0.5, R9=1.0, R10=1.5, R11=2.0, R12=2.5, R13=3.0
+```
+
 ---
 
 ### 5.4 高边坐标归一化
@@ -422,12 +448,16 @@ shape：
 theta_aligned = (theta_raw + RelBearing) mod 360
 ```
 
-但最终符号必须通过双符号实验确认：
+但数据驱动符号仍必须通过双符号实验评估：
 
 ```text
 theta_aligned_plus  = (theta_raw + RelBearing) mod 360
 theta_aligned_minus = (theta_raw - RelBearing) mod 360
 ```
+
+在 Side A / CAST 0°、Side A-H 顺时针和 CAST 方位 normal 均已人工确认后，
+plus 是当前 specification-preferred primary convention；但数据驱动验证仍为
+`insufficient_evidence`，不得写成 `data_confirmed_plus` 或 `confirmed_plus`。
 
 必须在 metadata 中保存：
 
@@ -522,6 +552,7 @@ Side A 与 Side H 相邻，0° 与 360° 相邻。
 | `/axis/depth` | float32 | `[depth]` | 是 | 统一深度轴 |
 | `/axis/time_ms` | float32 | `[time]` | 是 | XSI 时间轴，单位 ms |
 | `/axis/receiver_index` | int16 | `[receiver]` | 是 | 接收器索引 |
+| `/axis/xsi_receiver_offset_ft` | float32 | `[receiver]` | 是 | 相对 R7 reference line 的接收器 offset |
 | `/axis/side_index` | int16 | `[side]` | 是 | XSI Side 索引 |
 | `/axis/xsi_side_azimuth_deg` | float32 | `[side]` | 是 | XSI Side 方位角 |
 | `/axis/cast_azimuth_deg` | float32 | `[cast_azimuth]` | 是 | CAST 方位角 |
@@ -726,20 +757,22 @@ Halliburton RB / Relative Bearing 文档定义下，若 raw side azimuth 以 too
 theta_aligned = (theta_raw + RelBearing) mod 360
 ```
 
-MVP-2 当前状态必须记录为：
+MVP-2C 人工确认 Side A / CAST 0°、Side A-H 顺时针和 CAST 方位 normal 后，
+当前状态必须记录为：
 
 ```text
-relbearing_sign_status: documentation_preferred_plus_data_unresolved
-documentation_preferred_sign: plus
+relbearing_sign_status: specification_preferred_plus_data_unresolved
+primary_convention: plus
+ablation_convention: minus
 data_driven_validation: insufficient_evidence
 single_sign_alignment_approved: false
 approved_downstream_mode: plus_primary_minus_ablation
 ```
 
-该状态不等同于 `confirmed_plus`。Side A-H 相对 tool key 的顺序尚未独立确认，
-导出矩阵 / 图像方向仍可能存在 looking-uphole / looking-downhole 翻转，因此不得生成
-single-sign production alignment。后续只能以 documentation-preferred plus 为主候选、
-minus 为对照消融的 dual-sign / ablation 模式进入下一阶段。
+该状态不等同于 `data_confirmed_plus` 或 `confirmed_plus`。plus 是基于文档与人工确认
+几何/方位约定的 specification-preferred primary convention，不是数据驱动确认结论。
+因此不得生成 single-sign production alignment。后续只能以 plus 为主候选、minus 为
+对照消融的 dual-sign / ablation 模式进入下一阶段。
 
 #### 7.4.6 MVP-2 orientation confidence artifacts
 
@@ -795,7 +828,7 @@ resampling、RelBearing validation 和 orientation confidence 后，必须生成
 
 若 depth axes valid、depth grid exists、depth-only reader works、overlap-targeted
 resampling works、orientation confidence exists，且 RelBearing 状态为
-`documentation_preferred_plus_data_unresolved`，gate decision 必须为
+`specification_preferred_plus_data_unresolved`，gate decision 必须为
 `conditional_go`。该 conditional go 只允许进入 MVP-3 的
 `plus_primary_minus_ablation` workflow，不允许 single-sign production alignment、
 直接生成最终弱标签、feature extraction 或 model training。若存在 blocking errors，
@@ -804,7 +837,7 @@ decision 必须为 `no_go`。
 #### 7.4.8 MVP-2C RelBearing / side order / CAST direction manual calibration
 
 MVP-2 gate 为 `conditional_go` 且 RelBearing 仍为
-`documentation_preferred_plus_data_unresolved` 时，可执行 MVP-2C 人工审查与多假设
+`specification_preferred_plus_data_unresolved` 时，可执行 MVP-2C 人工审查与多假设
 校准。该阶段应先从 `depth_only_v001.npz`、`orientation_confidence_v001.npz` 和
 depth grid overlap 中主动扫描多个高质量候选窗口，再对入选窗口按需读取局部
 small-slice。不得把单个 fallback window 当作有效证据；每个窗口仍必须保持
@@ -814,9 +847,9 @@ small-slice 限制，不得读取完整 XSI waveform 或 full `CAST.Zc`。
 
 ```text
 relbearing_sign = plus / minus
-xsi_side_order = clockwise / counterclockwise
-cast_azimuth_direction = normal / reversed
-side_a_offset_deg = 0,45,90,135,180,225,270,315
+xsi_side_order = clockwise              # manually_confirmed
+cast_azimuth_direction = normal         # manually_confirmed
+side_a_offset_deg = 0.0                 # manually_confirmed
 ```
 
 输出：
@@ -1149,7 +1182,14 @@ depth_alignment_confidence
 | `/metadata/slowness_unit` | string | 特征阶段 | 慢度单位 |
 | `/metadata/sampling_interval_us` | float | 是 | XSI 采样间隔 |
 | `/metadata/xsi_receiver_count` | int | 是 | 接收器数量 |
+| `/metadata/xsi_reference_receiver_index` | int | 是 | reference line 接收器索引，当前为 7 |
+| `/metadata/xsi_receiver_spacing_ft` | float | 是 | XSI 阵列接收器间隔，当前为 0.5 ft |
+| `/metadata/xsi_source_to_receiver1_ft` | float | 是 | 下单极声源到 R1 距离，当前为 1.0 ft |
+| `/metadata/xsi_source_to_reference_receiver_ft` | float | 是 | 下单极声源到 reference receiver 距离，当前为 4.0 ft |
 | `/metadata/xsi_side_count` | int | 是 | XSI Side 数量 |
+| `/metadata/xsi_side_order` | string | 是 | Side A-H 顺序，当前 `clockwise` |
+| `/metadata/xsi_side_a_offset_deg` | float | 是 | Side A 相对 CAST 0° offset，当前 0.0 |
+| `/metadata/cast_azimuth_direction` | string | 是 | CAST 方位轴方向，当前 `normal` |
 | `/metadata/cast_azimuth_count` | int | 是 | CAST 方位数量 |
 | `/metadata/time_sample_count` | int | 是 | 时间采样点数量 |
 | `/metadata/relbearing_sign_selected` | string | 是 | RelBearing 符号 |

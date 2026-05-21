@@ -3,8 +3,23 @@ calibration_config_version: relbearing_calibration_v001
 status: manual_review_required
 production_alignment_config: not_written
 single_sign_alignment_approved: false
+single_sign_alignment_approval_basis: specification_only_not_data_confirmed
 final_recommendation: unresolved_keep_plus_primary_minus_ablation
-recommendation: null
+recommendation: specification_preferred_plus_primary_minus_ablation
+relbearing_sign_status: specification_preferred_plus_data_unresolved
+primary_convention: plus
+ablation_convention: minus
+data_driven_validation: insufficient_evidence
+manual_confirmations:
+  side_a_aligned_with_cast_0deg: true
+  side_a_offset_deg: 0.0
+  side_a_offset_status: manually_confirmed
+  xsi_side_order: clockwise
+  xsi_side_order_status: manually_confirmed
+  cast_azimuth_direction: normal
+  cast_azimuth_direction_status: manually_confirmed
+  cast_azimuth_values: 0,2,4,...,358
+xsi_geometry_config: configs/xsi_geometry.example.yaml
 decision_rules:
   min_valid_windows: 5
   min_support_ratio: 0.7
@@ -28,20 +43,12 @@ hypothesis_space:
   - minus
   xsi_side_order:
   - clockwise
-  - counterclockwise
   cast_azimuth_direction:
   - normal
-  - reversed
   side_a_offset_deg:
   - 0.0
-  - 45.0
-  - 90.0
-  - 135.0
-  - 180.0
-  - 225.0
-  - 270.0
-  - 315.0
 notes:
 - This is a manual review/calibration example, not a production alignment config.
-- Do not mark plus or minus as confirmed from this file alone.
-- If unresolved, continue plus-primary / minus-ablation downstream mode only.
+- Side A offset, XSI side order, and CAST azimuth direction are manually confirmed.
+- Do not mark plus as data-confirmed from this file alone.
+- Continue plus-primary / minus-ablation downstream mode only.

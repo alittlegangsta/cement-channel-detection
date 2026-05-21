@@ -937,8 +937,25 @@ def calibration_config_dict(report: RelBearingCalibrationReport) -> dict[str, An
         "status": "manual_review_required",
         "production_alignment_config": "not_written",
         "single_sign_alignment_approved": False,
+        "single_sign_alignment_approval_basis": "specification_only_not_data_confirmed",
         "final_recommendation": data["final_recommendation"],
-        "recommendation": data["recommendation"],
+        "recommendation": data["recommendation"]
+        or "specification_preferred_plus_primary_minus_ablation",
+        "relbearing_sign_status": "specification_preferred_plus_data_unresolved",
+        "primary_convention": "plus",
+        "ablation_convention": "minus",
+        "data_driven_validation": "insufficient_evidence",
+        "manual_confirmations": {
+            "side_a_aligned_with_cast_0deg": True,
+            "side_a_offset_deg": 0.0,
+            "side_a_offset_status": "manually_confirmed",
+            "xsi_side_order": "clockwise",
+            "xsi_side_order_status": "manually_confirmed",
+            "cast_azimuth_direction": "normal",
+            "cast_azimuth_direction_status": "manually_confirmed",
+            "cast_azimuth_values": "0,2,4,...,358",
+        },
+        "xsi_geometry_config": "configs/xsi_geometry.example.yaml",
         "decision_rules": {
             "min_valid_windows": data["parameters"]["min_valid_windows"],
             "min_support_ratio": data["parameters"]["min_support_ratio"],
@@ -965,14 +982,15 @@ def calibration_config_dict(report: RelBearingCalibrationReport) -> dict[str, An
         ],
         "hypothesis_space": {
             "relbearing_sign": ["plus", "minus"],
-            "xsi_side_order": ["clockwise", "counterclockwise"],
-            "cast_azimuth_direction": ["normal", "reversed"],
-            "side_a_offset_deg": SIDe_A_OFFSETS_DEG,
+            "xsi_side_order": ["clockwise"],
+            "cast_azimuth_direction": ["normal"],
+            "side_a_offset_deg": [0.0],
         },
         "notes": [
             "This is a manual review/calibration example, not a production alignment config.",
-            "Do not mark plus or minus as confirmed from this file alone.",
-            "If unresolved, continue plus-primary / minus-ablation downstream mode only.",
+            "Side A offset, XSI side order, and CAST azimuth direction are manually confirmed.",
+            "Do not mark plus as data-confirmed from this file alone.",
+            "Continue plus-primary / minus-ablation downstream mode only.",
         ],
     }
 

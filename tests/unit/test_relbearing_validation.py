@@ -53,10 +53,16 @@ def test_validate_relbearing_sign_reports_insufficient_evidence(tmp_path: Path) 
     assert report.mvp3_allowed_without_confirmation is False
     assert (
         report.convention_conclusion["relbearing_sign_status"]
-        == "documentation_preferred_plus_data_unresolved"
+        == "specification_preferred_plus_data_unresolved"
     )
     assert report.convention_conclusion["documentation_preferred_sign"] == "plus"
+    assert report.convention_conclusion["primary_convention"] == "plus"
+    assert report.convention_conclusion["ablation_convention"] == "minus"
     assert report.convention_conclusion["single_sign_alignment_approved"] is False
+    assert (
+        report.convention_conclusion["single_sign_alignment_approval_basis"]
+        == "specification_only_not_data_confirmed"
+    )
     assert all(metric.wrap_valid for metric in report.candidate_metrics.values())
 
 
@@ -70,11 +76,20 @@ def test_relbearing_config_requires_confirmation(tmp_path: Path) -> None:
 
     config = relbearing_config_dict(report)
 
-    assert config["selected_convention"] == "unconfirmed"
-    assert config["relbearing_sign_status"] == "documentation_preferred_plus_data_unresolved"
+    assert config["status"] == "specification_preferred_primary_data_unresolved"
+    assert config["selected_convention"] == "plus_primary_minus_ablation"
+    assert config["relbearing_sign_status"] == "specification_preferred_plus_data_unresolved"
+    assert config["primary_convention"] == "plus"
+    assert config["ablation_convention"] == "minus"
     assert config["documentation_preferred_sign"] == "plus"
     assert config["data_driven_validation"] == "insufficient_evidence"
     assert config["single_sign_alignment_approved"] is False
     assert config["approved_downstream_mode"] == "plus_primary_minus_ablation"
+    assert config["manual_confirmations"]["side_a_offset_deg"] == 0.0
+    assert config["manual_confirmations"]["xsi_side_order"] == "clockwise"
+    assert config["manual_confirmations"]["cast_azimuth_direction"] == "normal"
     assert config["manual_confirmation_required"] is True
-    assert config["mvp3_allowed_without_confirmation"] is False
+    assert (
+        config["mvp3_allowed_without_data_confirmation"]
+        == "plus_primary_minus_ablation_only"
+    )
