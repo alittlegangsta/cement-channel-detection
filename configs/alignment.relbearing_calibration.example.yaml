@@ -1,0 +1,34 @@
+schema_version: schema_v001
+calibration_config_version: relbearing_calibration_v001
+status: manual_review_required
+production_alignment_config: not_written
+single_sign_alignment_approved: false
+final_recommendation: unresolved_keep_plus_primary_minus_ablation
+recommendation: null
+decision_rules:
+  min_valid_windows: 5
+  min_support_ratio: 0.7
+  min_score_gap: 0.05
+hypothesis_space:
+  relbearing_sign:
+  - plus
+  - minus
+  xsi_side_order:
+  - clockwise
+  - counterclockwise
+  cast_azimuth_direction:
+  - normal
+  - reversed
+  side_a_offset_deg:
+  - 0.0
+  - 45.0
+  - 90.0
+  - 135.0
+  - 180.0
+  - 225.0
+  - 270.0
+  - 315.0
+notes:
+- This is a manual review/calibration example, not a production alignment config.
+- Do not mark plus or minus as confirmed from this file alone.
+- If unresolved, continue plus-primary / minus-ablation downstream mode only.

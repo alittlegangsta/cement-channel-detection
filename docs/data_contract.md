@@ -801,6 +801,47 @@ resampling works、orientation confidence exists，且 RelBearing 状态为
 直接生成最终弱标签、feature extraction 或 model training。若存在 blocking errors，
 decision 必须为 `no_go`。
 
+#### 7.4.8 MVP-2C RelBearing / side order / CAST direction manual calibration
+
+MVP-2 gate 为 `conditional_go` 且 RelBearing 仍为
+`documentation_preferred_plus_data_unresolved` 时，可执行 MVP-2C 人工审查与多假设
+校准。该阶段只允许读取 depth-only、orientation confidence、overlap-targeted
+small-slice 和 overlap resample preview，不得读取完整 XSI waveform 或 full
+`CAST.Zc`。
+
+必须比较的假设空间：
+
+```text
+relbearing_sign = plus / minus
+xsi_side_order = clockwise / counterclockwise
+cast_azimuth_direction = normal / reversed
+side_a_offset_deg = 0,45,90,135,180,225,270,315
+```
+
+输出：
+
+```text
+/home/xiaoj/cement-channel-data/reports/relbearing_calibration_report.md
+/home/xiaoj/cement-channel-data/reports/relbearing_calibration_report.json
+/home/xiaoj/cement-channel-data/reports/relbearing_manual_review/
+```
+
+`relbearing_manual_review/` 可包含 CAST Zc raw / plus-minus / normal-reversed 对比图、
+XSI side energy raw / plus-minus / side-order 对比图、hypothesis score summary 和
+`review_summary_template.md`。图像和报告均为人工审查 artifact，不得提交到 Git。
+
+判定规则：
+
+```text
+至少 5 个有效窗口才允许 data-supported recommendation
+至少 70% 有效窗口支持同一候选
+best-vs-second score gap 必须超过阈值
+不满足时 final_recommendation = unresolved_keep_plus_primary_minus_ablation
+满足时也只能输出 recommendation，不得写成 confirmed
+single_sign_alignment_approved = false
+production_alignment_config_written = false
+```
+
 ---
 
 ### 7.5 `/quality`
