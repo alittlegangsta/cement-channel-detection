@@ -945,6 +945,30 @@ label_confidence 缺失
 标签与 QC 冲突
 ```
 
+MVP-3 当前阶段只允许生成 CAST weak-label candidates，而不是 final labels。
+当 RelBearing 状态仍为 `specification_preferred_plus_data_unresolved` 时，必须采用：
+
+```text
+primary_convention: plus
+ablation_convention: minus
+approved_downstream_mode: plus_primary_minus_ablation
+```
+
+MVP-3 gate 至少检查：
+
+```text
+CAST label input readable
+adaptive baseline valid
+plus / minus candidate metadata preserved
+label_confidence exists
+audit has no blocking errors
+human review figures exist
+no final label is falsely claimed
+```
+
+若 label coverage 极端异常、plus/minus disagreement 极高、baseline 失效或阈值
+需要人工确认，gate 必须为 `conditional_go` 或 `no_go`。
+
 ---
 
 ## 9. 相关性验证协议

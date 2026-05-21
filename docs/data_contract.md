@@ -1033,6 +1033,44 @@ depth 单位一致。若排除区间使用 `ft` 而内部 depth 轴为 `m` 或 `
 
 ---
 
+### 7.7.1 MVP-3 CAST weak-label candidate schema
+
+MVP-3 只生成 CAST weak-label candidates，不生成 final labels。当前候选版本为：
+
+```text
+label_version = cast_weak_v001
+```
+
+必须同时保存 plus primary 与 minus ablation 两套候选：
+
+```text
+label_source_plus = cast_weak_plus
+label_source_minus = cast_weak_minus_ablation
+convention_status = specification_preferred_plus_data_unresolved
+no_final_labels = true
+```
+
+候选数组推荐以 NPZ 保存，shape 为 `[depth, cast_azimuth]`，并至少包含：
+
+```text
+presence_plus
+severity_plus
+label_confidence_plus
+presence_minus_ablation
+severity_minus_ablation
+label_confidence_minus_ablation
+evidence_flags_plus
+evidence_flags_minus_ablation
+cast_azimuth_aligned_deg
+metadata_json
+```
+
+MVP-3 候选规则不得只依赖固定阈值，必须包含自适应 `Zc_base` 和
+`relative_drop`。若 `zc_min_limit` 未经人工确认，报告必须标记为
+`requires_human_threshold_confirmation`。
+
+---
+
 ### 7.8 `/objects`
 
 对象级标签用于描述空间连通窜槽对象。
