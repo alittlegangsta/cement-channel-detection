@@ -3,9 +3,11 @@ from __future__ import annotations
 import numpy as np
 
 from cement_channel.alignment.relbearing_calibration import (
+    ExcludeInterval,
     calibrate_relbearing_convention,
     cast_azimuth_deg,
     generate_hypotheses,
+    scan_depth_candidate_windows,
     xsi_side_azimuth_deg,
 )
 
@@ -119,3 +121,81 @@ def test_insufficient_evidence_stays_unresolved() -> None:
 
     assert report.final_recommendation == "unresolved_keep_plus_primary_minus_ablation"
     assert report.valid_window_count == 0
+
+
+def _write_depth_scan_inputs(tmp_path, *, orientation_value: float = 1.0) -> dict[str, object]:
+    depth = np.arange(100.0, 120.0, 0.5, dtype=np.float32)
+    depth_only = tmp_path / "depth_only_v001.npz"
+    orientation = tmp_path / "orientation_confidence_v001.npz"
+    proposal = tmp_path / "depth_grid_proposal.json"
+    np.savez_compressed(
+        depth_only,
+        pose_depth=depth,
+        inc_deg=np.full(depth.shape, 8.0, dtype=np.float32),
+        relbearing_deg=np.linspace(10.0, 20.0, depth.size).astype(np.float32),
+    )
+    np.savez_compressed(
+        orientation,
+        pose_depth=depth,
+        orientation_confidence=np.full(depth.shape, orientation_value, dtype=np.float32),
+    )
+    proposal.write_text(
+        '{"common_overlap_min": 100.0, "common_overlap_max": 120.0}',
+        encoding="utf-8",
+    )
+    return {"depth_only": depth_only, "orientation": orientation, "proposal": proposal}
+
+
+def test_scan_depth_candidate_windows_finds_high_confidence_windows(tmp_path) -> None:
+    paths = _write_depth_scan_inputs(tmp_path, orientation_value=1.0)
+
+    scan = scan_depth_candidate_windows(
+        depth_only_npz=paths["depth_only"],
+        orientation_confidence_npz=paths["orientation"],
+        depth_grid_proposal_json=paths["proposal"],
+        depth_window_size=2.0,
+        max_windows=5,
+        min_orientation_confidence=0.5,
+        min_inc_deg=5.0,
+    )
+
+    assert len(scan.included_windows) == 5
+    assert all(window.include for window in scan.included_windows)
+
+
+def test_scan_depth_candidate_windows_excludes_low_orientation(tmp_path) -> None:
+    paths = _write_depth_scan_inputs(tmp_path, orientation_value=0.1)
+
+    scan = scan_depth_candidate_windows(
+        depth_only_npz=paths["depth_only"],
+        orientation_confidence_npz=paths["orientation"],
+        depth_grid_proposal_json=paths["proposal"],
+        depth_window_size=2.0,
+        max_windows=5,
+        min_orientation_confidence=0.5,
+    )
+
+    assert scan.included_windows == []
+    assert scan.excluded_windows
+    assert "low_orientation_confidence" in scan.excluded_windows[0].reasons
+
+
+def test_scan_depth_candidate_windows_applies_matching_exclude_interval(tmp_path) -> None:
+    paths = _write_depth_scan_inputs(tmp_path, orientation_value=1.0)
+
+    scan = scan_depth_candidate_windows(
+        depth_only_npz=paths["depth_only"],
+        orientation_confidence_npz=paths["orientation"],
+        depth_grid_proposal_json=paths["proposal"],
+        depth_window_size=2.0,
+        max_windows=20,
+        min_orientation_confidence=0.5,
+        min_inc_deg=5.0,
+        exclude_intervals=[
+            ExcludeInterval(104.0, 108.0, "ft", "manual unreliable interval")
+        ],
+        depth_unit="ft",
+    )
+
+    excluded_reasons = [reason for window in scan.excluded_windows for reason in window.reasons]
+    assert any(reason.startswith("manual_exclude_interval") for reason in excluded_reasons)

@@ -9,6 +9,13 @@ from typing import Any, Literal
 import numpy as np
 import yaml
 
+from cement_channel.data.small_slice_reader import (
+    DepthWindow,
+    SmallSliceLimits,
+    load_depth_reference_arrays,
+    load_mapping_config,
+    read_small_slice,
+)
 from cement_channel.utils.angles import circular_distance_deg, signed_circular_delta_deg, wrap_deg
 
 RELBearingSign = Literal["plus", "minus"]
@@ -63,6 +70,51 @@ class ExcludedWindow:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class ExcludeInterval:
+    start_depth: float
+    stop_depth: float
+    unit: str
+    reason: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CandidateDepthWindow:
+    window_id: str
+    depth_start: float
+    depth_stop: float
+    depth_center: float
+    sample_count: int
+    orientation_confidence_mean: float | None
+    inc_mean_deg: float | None
+    relbearing_jump_max_deg: float | None
+    include: bool
+    reasons: list[str]
+    quality_score: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CandidateWindowScanResult:
+    included_windows: list[CandidateDepthWindow]
+    excluded_windows: list[CandidateDepthWindow]
+    warnings: list[str]
+    parameters: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "included_windows": [window.to_dict() for window in self.included_windows],
+            "excluded_windows": [window.to_dict() for window in self.excluded_windows],
+            "warnings": self.warnings,
+            "parameters": self.parameters,
+        }
 
 
 @dataclass(frozen=True)
@@ -134,6 +186,8 @@ class RelBearingCalibrationReport:
     production_alignment_config_written: bool
     warnings: list[str]
     errors: list[str]
+    candidate_window_scan: dict[str, Any] | None = None
+    fallback_window_counted_as_evidence: bool = False
     figures: dict[str, str] = field(default_factory=dict)
     not_performed: list[str] = field(
         default_factory=lambda: [
@@ -176,6 +230,8 @@ class RelBearingCalibrationReport:
             "production_alignment_config_written": self.production_alignment_config_written,
             "warnings": self.warnings,
             "errors": self.errors,
+            "candidate_window_scan": self.candidate_window_scan,
+            "fallback_window_counted_as_evidence": self.fallback_window_counted_as_evidence,
             "figures": self.figures,
             "not_performed": self.not_performed,
         }
@@ -329,15 +385,164 @@ def select_calibration_windows(
     return valid[: max(1, int(max_windows))], excluded
 
 
+def load_exclude_intervals_yaml(path: Path | str | None) -> list[ExcludeInterval]:
+    if path is None:
+        return []
+    yaml_path = Path(path)
+    if not yaml_path.exists():
+        raise FileNotFoundError(f"Exclude intervals YAML does not exist: {yaml_path}")
+    data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    if data is None:
+        return []
+    if isinstance(data, dict):
+        raw_intervals = data.get("no_eccentric_or_rb_unreliable_intervals", [])
+    elif isinstance(data, list):
+        raw_intervals = data
+    else:
+        raise ValueError("Exclude intervals YAML must contain a list or mapping.")
+    intervals: list[ExcludeInterval] = []
+    for item in raw_intervals or []:
+        if not isinstance(item, dict):
+            raise ValueError("Each exclude interval must be a mapping.")
+        intervals.append(
+            ExcludeInterval(
+                start_depth=float(item["start_depth"]),
+                stop_depth=float(item["stop_depth"]),
+                unit=str(item.get("unit", "unknown_to_verify")),
+                reason=str(item.get("reason", "manual exclude interval")),
+            )
+        )
+    return intervals
+
+
+def scan_depth_candidate_windows(
+    *,
+    depth_only_npz: Path | str,
+    orientation_confidence_npz: Path | str,
+    depth_grid_proposal_json: Path | str,
+    depth_window_size: float = 2.0,
+    max_windows: int = 8,
+    min_orientation_confidence: float = 0.5,
+    min_inc_deg: float = 5.0,
+    max_relbearing_jump_deg: float = 45.0,
+    exclude_intervals: list[ExcludeInterval] | None = None,
+    depth_unit: str = "unknown_to_verify",
+) -> CandidateWindowScanResult:
+    if depth_window_size <= 0.0:
+        raise ValueError("depth_window_size must be positive.")
+    with np.load(depth_only_npz) as depth_only:
+        pose_depth = np.asarray(depth_only["pose_depth"], dtype=np.float32).reshape(-1)
+        inc_deg = np.asarray(depth_only["inc_deg"], dtype=np.float32).reshape(-1)
+        relbearing = np.asarray(depth_only["relbearing_deg"], dtype=np.float32).reshape(-1)
+    with np.load(orientation_confidence_npz) as orientation:
+        orient_depth = np.asarray(orientation["pose_depth"], dtype=np.float32).reshape(-1)
+        orient_conf = np.asarray(
+            orientation["orientation_confidence"],
+            dtype=np.float32,
+        ).reshape(-1)
+    proposal = _read_json(depth_grid_proposal_json)
+    overlap_min = _first_float(
+        proposal.get("common_overlap_min"),
+        proposal.get("depth_start"),
+    )
+    overlap_max = _first_float(
+        proposal.get("common_overlap_max"),
+        proposal.get("depth_stop"),
+    )
+    if overlap_min is None or overlap_max is None or overlap_max <= overlap_min:
+        raise ValueError("Depth grid proposal does not define a positive overlap interval.")
+
+    count = min(pose_depth.size, inc_deg.size, relbearing.size)
+    pose_depth = pose_depth[:count]
+    inc_deg = inc_deg[:count]
+    relbearing = relbearing[:count]
+    finite = np.isfinite(pose_depth) & np.isfinite(inc_deg) & np.isfinite(relbearing)
+    order = np.argsort(pose_depth[finite])
+    depth = pose_depth[finite][order]
+    inc = inc_deg[finite][order]
+    rel = relbearing[finite][order]
+    orient = _interp_on_depth(orient_depth, orient_conf, depth)
+
+    warnings = _exclude_interval_unit_warnings(exclude_intervals or [], depth_unit)
+    active_intervals = [
+        interval
+        for interval in exclude_intervals or []
+        if _interval_unit_matches(interval.unit, depth_unit)
+    ]
+    starts = np.arange(float(overlap_min), float(overlap_max), float(depth_window_size))
+    included: list[CandidateDepthWindow] = []
+    excluded: list[CandidateDepthWindow] = []
+    for index, start in enumerate(starts):
+        stop = min(float(start + depth_window_size), float(overlap_max))
+        if stop <= start:
+            continue
+        mask = (depth >= start) & (depth <= stop)
+        reasons: list[str] = []
+        sample_count = int(np.sum(mask))
+        inc_mean = _nanmean_or_none(inc[mask])
+        orient_mean = _nanmean_or_none(orient[mask])
+        rel_jump = _max_relbearing_jump(rel[mask])
+        for interval in active_intervals:
+            if _interval_overlaps(start, stop, interval.start_depth, interval.stop_depth):
+                reasons.append(f"manual_exclude_interval:{interval.reason}")
+        if sample_count < 2:
+            reasons.append("insufficient_depth_only_samples")
+        if orient_mean is None or orient_mean < float(min_orientation_confidence):
+            reasons.append("low_orientation_confidence")
+        if inc_mean is None or inc_mean < float(min_inc_deg):
+            reasons.append("low_inclination")
+        if rel_jump is None or rel_jump > float(max_relbearing_jump_deg):
+            reasons.append("relbearing_jump_too_large")
+        quality = float((orient_mean or 0.0) + (inc_mean or 0.0) / 90.0)
+        window = CandidateDepthWindow(
+            window_id=f"candidate_{index:04d}",
+            depth_start=float(start),
+            depth_stop=float(stop),
+            depth_center=float((start + stop) / 2.0),
+            sample_count=sample_count,
+            orientation_confidence_mean=orient_mean,
+            inc_mean_deg=inc_mean,
+            relbearing_jump_max_deg=rel_jump,
+            include=not reasons,
+            reasons=reasons or ["included"],
+            quality_score=quality,
+        )
+        if reasons:
+            excluded.append(window)
+        else:
+            included.append(window)
+    included = sorted(included, key=lambda window: window.quality_score, reverse=True)
+    return CandidateWindowScanResult(
+        included_windows=included[: max(1, int(max_windows))],
+        excluded_windows=excluded,
+        warnings=warnings,
+        parameters={
+            "depth_window_size": float(depth_window_size),
+            "max_windows": int(max_windows),
+            "min_orientation_confidence": float(min_orientation_confidence),
+            "min_inc_deg": float(min_inc_deg),
+            "max_relbearing_jump_deg": float(max_relbearing_jump_deg),
+            "depth_unit": depth_unit,
+            "overlap_min": float(overlap_min),
+            "overlap_max": float(overlap_max),
+            "fallback_window_counted_as_evidence": False,
+        },
+    )
+
+
 def calibrate_relbearing_convention(
     *,
     depth: np.ndarray,
     relbearing_deg: np.ndarray,
     orientation_confidence: np.ndarray,
     cast_zc: np.ndarray,
-    xsi_waveform: np.ndarray,
+    xsi_waveform: np.ndarray | None = None,
+    xsi_side_energy: np.ndarray | None = None,
     cast_azimuth_axis_deg: np.ndarray | None = None,
     inputs: dict[str, str] | None = None,
+    preselected_windows: list[CalibrationWindow] | None = None,
+    preexcluded_windows: list[ExcludedWindow] | None = None,
+    candidate_window_scan: CandidateWindowScanResult | None = None,
     window_depth_samples: int = 3,
     window_stride: int = 1,
     max_windows: int = 8,
@@ -348,7 +553,12 @@ def calibrate_relbearing_convention(
     min_score_gap: float = 0.05,
 ) -> tuple[RelBearingCalibrationReport, dict[str, np.ndarray]]:
     cast_values = np.asarray(cast_zc, dtype=np.float32)
-    xsi_energy = xsi_side_rms_energy(xsi_waveform)
+    if xsi_side_energy is None:
+        if xsi_waveform is None:
+            raise ValueError("Either xsi_waveform or xsi_side_energy must be provided.")
+        xsi_energy = xsi_side_rms_energy(xsi_waveform)
+    else:
+        xsi_energy = np.asarray(xsi_side_energy, dtype=np.float32)
     common_count = min(
         np.asarray(depth).size,
         np.asarray(relbearing_deg).size,
@@ -371,18 +581,22 @@ def calibrate_relbearing_convention(
     if common_count == 0:
         errors.append("No common depth samples available for RelBearing calibration.")
 
-    valid_windows, excluded_windows = select_calibration_windows(
-        depth=arrays["depth"],
-        relbearing_deg=arrays["relbearing_deg"],
-        orientation_confidence=arrays["orientation_confidence"],
-        cast_zc=arrays["cast_zc"],
-        xsi_side_energy=arrays["xsi_side_energy"],
-        window_depth_samples=window_depth_samples,
-        window_stride=window_stride,
-        min_orientation_confidence=min_orientation_confidence,
-        max_relbearing_jump_deg=max_relbearing_jump_deg,
-        max_windows=max_windows,
-    )
+    if preselected_windows is None:
+        valid_windows, excluded_windows = select_calibration_windows(
+            depth=arrays["depth"],
+            relbearing_deg=arrays["relbearing_deg"],
+            orientation_confidence=arrays["orientation_confidence"],
+            cast_zc=arrays["cast_zc"],
+            xsi_side_energy=arrays["xsi_side_energy"],
+            window_depth_samples=window_depth_samples,
+            window_stride=window_stride,
+            min_orientation_confidence=min_orientation_confidence,
+            max_relbearing_jump_deg=max_relbearing_jump_deg,
+            max_windows=max_windows,
+        )
+    else:
+        valid_windows = preselected_windows
+        excluded_windows = preexcluded_windows or []
     if len(valid_windows) < min_valid_windows:
         warnings.append(
             f"Only {len(valid_windows)} valid calibration windows; at least {min_valid_windows} "
@@ -452,6 +666,7 @@ def calibrate_relbearing_convention(
             "max_relbearing_jump_deg": float(max_relbearing_jump_deg),
             "min_support_ratio": float(min_support_ratio),
             "min_score_gap": float(min_score_gap),
+            "fallback_window_counted_as_evidence": False,
         },
         hypothesis_count=len(hypotheses),
         valid_window_count=len(valid_windows),
@@ -473,6 +688,10 @@ def calibrate_relbearing_convention(
         production_alignment_config_written=False,
         warnings=warnings,
         errors=errors,
+        candidate_window_scan=(
+            candidate_window_scan.to_dict() if candidate_window_scan is not None else None
+        ),
+        fallback_window_counted_as_evidence=False,
     )
     return report, arrays
 
@@ -537,6 +756,104 @@ def build_calibration_report_from_files(
     return report, arrays
 
 
+def build_calibration_report_from_scanned_windows(
+    *,
+    paths_config: dict[str, Any],
+    mapping_path: Path | str,
+    depth_only_npz: Path | str,
+    orientation_confidence_npz: Path | str,
+    depth_grid_proposal_json: Path | str,
+    relbearing_validation_report_json: Path | str | None = None,
+    exclude_intervals_yaml: Path | str | None = None,
+    depth_unit: str = "unknown_to_verify",
+    depth_window_size: float = 2.0,
+    max_windows: int = 8,
+    min_valid_windows: int = 5,
+    min_orientation_confidence: float = 0.5,
+    min_inc_deg: float = 5.0,
+    max_relbearing_jump_deg: float = 45.0,
+    min_support_ratio: float = 0.70,
+    min_score_gap: float = 0.05,
+    max_depth_samples: int = 16,
+    max_time_samples: int = 64,
+    max_receivers: int = 13,
+    max_sides: int = 8,
+    max_cast_azimuth: int = 180,
+) -> tuple[RelBearingCalibrationReport, dict[str, np.ndarray], CandidateWindowScanResult]:
+    intervals = load_exclude_intervals_yaml(exclude_intervals_yaml)
+    scan = scan_depth_candidate_windows(
+        depth_only_npz=depth_only_npz,
+        orientation_confidence_npz=orientation_confidence_npz,
+        depth_grid_proposal_json=depth_grid_proposal_json,
+        depth_window_size=depth_window_size,
+        max_windows=max_windows,
+        min_orientation_confidence=min_orientation_confidence,
+        min_inc_deg=min_inc_deg,
+        max_relbearing_jump_deg=max_relbearing_jump_deg,
+        exclude_intervals=intervals,
+        depth_unit=depth_unit,
+    )
+    depth_reference = load_depth_reference_arrays(depth_only_npz)
+    mapping = load_mapping_config(mapping_path)
+    with np.load(orientation_confidence_npz) as orientation:
+        orientation_depth = np.asarray(orientation["pose_depth"], dtype=np.float32)
+        orientation_confidence = np.asarray(
+            orientation["orientation_confidence"],
+            dtype=np.float32,
+        )
+    arrays, valid_windows, read_excluded = _read_scanned_window_arrays(
+        paths_config=paths_config,
+        mapping=mapping,
+        mapping_path=mapping_path,
+        depth_reference_arrays=depth_reference,
+        orientation_depth=orientation_depth,
+        orientation_confidence=orientation_confidence,
+        candidate_windows=scan.included_windows,
+        limits=SmallSliceLimits(
+            max_depth_samples=max_depth_samples,
+            max_time_samples=max_time_samples,
+            max_receivers=max_receivers,
+            max_sides=max_sides,
+            max_cast_azimuth=max_cast_azimuth,
+        ),
+    )
+    validation_decision = None
+    if (
+        relbearing_validation_report_json is not None
+        and Path(relbearing_validation_report_json).exists()
+    ):
+        data = _read_json(relbearing_validation_report_json)
+        validation_decision = data.get("decision")
+    report, arrays = calibrate_relbearing_convention(
+        depth=arrays["depth"],
+        relbearing_deg=arrays["relbearing_deg"],
+        orientation_confidence=arrays["orientation_confidence"],
+        cast_zc=arrays["cast_zc"],
+        xsi_side_energy=arrays["xsi_side_energy"],
+        cast_azimuth_axis_deg=arrays["cast_azimuth_axis_deg"],
+        inputs={
+            "depth_only_npz": str(depth_only_npz),
+            "orientation_confidence_npz": str(orientation_confidence_npz),
+            "depth_grid_proposal_json": str(depth_grid_proposal_json),
+            "relbearing_validation_report_json": str(relbearing_validation_report_json or ""),
+            "relbearing_validation_decision": str(validation_decision),
+            "exclude_intervals_yaml": str(exclude_intervals_yaml or ""),
+            "window_source": "scanned_depth_only_plus_per_window_small_slices",
+        },
+        preselected_windows=valid_windows,
+        preexcluded_windows=read_excluded,
+        candidate_window_scan=scan,
+        max_windows=max_windows,
+        min_valid_windows=min_valid_windows,
+        min_orientation_confidence=min_orientation_confidence,
+        max_relbearing_jump_deg=max_relbearing_jump_deg,
+        min_support_ratio=min_support_ratio,
+        min_score_gap=min_score_gap,
+    )
+    report.warnings.extend(scan.warnings)
+    return report, arrays, scan
+
+
 def format_calibration_markdown(report: RelBearingCalibrationReport) -> str:
     data = report.to_dict()
     lines = [
@@ -550,6 +867,7 @@ def format_calibration_markdown(report: RelBearingCalibrationReport) -> str:
         f"- Best support ratio: {data['best_support_ratio']}",
         f"- Manual confirmation required: {data['manual_confirmation_required']}",
         f"- Single-sign alignment approved: {data['single_sign_alignment_approved']}",
+        f"- Fallback window counted as evidence: {data['fallback_window_counted_as_evidence']}",
         "",
         "## Best Hypothesis",
         "",
@@ -564,6 +882,12 @@ def format_calibration_markdown(report: RelBearingCalibrationReport) -> str:
     ]
     for key, value in data["enough_to_suggest"].items():
         lines.append(f"- {key}: {value}")
+    if data["candidate_window_scan"] is not None:
+        lines.extend(["", "## Candidate Window Scan", ""])
+        scan = data["candidate_window_scan"]
+        lines.append(f"- included_windows: {len(scan['included_windows'])}")
+        lines.append(f"- excluded_windows: {len(scan['excluded_windows'])}")
+        lines.append("- fallback windows are not counted as valid evidence")
     lines.extend(["", "## Attribute Votes", ""])
     lines.append(json.dumps(data["attribute_votes"], ensure_ascii=False, indent=2))
     lines.extend(["", "## Hypothesis Scores", ""])
@@ -619,7 +943,26 @@ def calibration_config_dict(report: RelBearingCalibrationReport) -> dict[str, An
             "min_valid_windows": data["parameters"]["min_valid_windows"],
             "min_support_ratio": data["parameters"]["min_support_ratio"],
             "min_score_gap": data["parameters"]["min_score_gap"],
+            "fallback_window_counted_as_evidence": False,
         },
+        "window_scan": {
+            "scan_depth_windows": True,
+            "depth_window_size": 2.0,
+            "min_orientation_confidence": 0.5,
+            "min_inc_deg": 5.0,
+            "max_relbearing_jump_deg": 45.0,
+        },
+        "no_eccentric_or_rb_unreliable_intervals": [
+            {
+                "start_depth": 2732,
+                "stop_depth": 4132,
+                "unit": "ft",
+                "reason": "PPT indicates no eccentric tool and RB unreliable",
+                "unit_note": (
+                    "Do not apply to non-ft internal depth units without explicit conversion."
+                ),
+            }
+        ],
         "hypothesis_space": {
             "relbearing_sign": ["plus", "minus"],
             "xsi_side_order": ["clockwise", "counterclockwise"],
@@ -659,6 +1002,58 @@ def write_calibration_outputs(
     )
 
 
+def write_candidate_windows_markdown(
+    scan: CandidateWindowScanResult,
+    *,
+    output_md: Path,
+    overwrite: bool,
+) -> None:
+    _ensure_can_write(output_md, overwrite=overwrite)
+    output_md.parent.mkdir(parents=True, exist_ok=True)
+    output_md.write_text(format_candidate_windows_markdown(scan), encoding="utf-8")
+
+
+def format_candidate_windows_markdown(scan: CandidateWindowScanResult) -> str:
+    data = scan.to_dict()
+    lines = [
+        "# RelBearing Candidate Windows",
+        "",
+        f"- Included windows: {len(data['included_windows'])}",
+        f"- Excluded windows: {len(data['excluded_windows'])}",
+        "- Fallback window counted as evidence: "
+        f"{data['parameters'].get('fallback_window_counted_as_evidence')}",
+        "",
+        "## Parameters",
+        "",
+    ]
+    for key, value in data["parameters"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Included Windows", ""])
+    if data["included_windows"]:
+        for window in data["included_windows"]:
+            lines.append(
+                f"- {window['window_id']}: {window['depth_start']}..{window['depth_stop']}, "
+                f"orientation={window['orientation_confidence_mean']}, "
+                f"inc={window['inc_mean_deg']}, rb_jump={window['relbearing_jump_max_deg']}, "
+                f"reason={window['reasons']}"
+            )
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Excluded Windows", ""])
+    if data["excluded_windows"]:
+        for window in data["excluded_windows"]:
+            lines.append(
+                f"- {window['window_id']}: {window['depth_start']}..{window['depth_stop']}, "
+                f"reasons={window['reasons']}"
+            )
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Warnings", ""])
+    lines.extend(_message_lines(data["warnings"]))
+    lines.append("")
+    return "\n".join(lines)
+
+
 def cast_azimuthal_contrast(cast_zc: np.ndarray) -> float | None:
     values = np.asarray(cast_zc, dtype=np.float32)
     if values.ndim != 2 or values.size == 0:
@@ -675,6 +1070,124 @@ def xsi_side_energy_contrast(xsi_side_energy: np.ndarray) -> float | None:
     per_depth = np.nanmax(values, axis=1) - np.nanmin(values, axis=1)
     finite = per_depth[np.isfinite(per_depth)]
     return float(np.median(finite)) if finite.size else None
+
+
+def _read_scanned_window_arrays(
+    *,
+    paths_config: dict[str, Any],
+    mapping: dict[str, Any],
+    mapping_path: Path | str,
+    depth_reference_arrays: dict[str, np.ndarray],
+    orientation_depth: np.ndarray,
+    orientation_confidence: np.ndarray,
+    candidate_windows: list[CandidateDepthWindow],
+    limits: SmallSliceLimits,
+) -> tuple[dict[str, np.ndarray], list[CalibrationWindow], list[ExcludedWindow]]:
+    depth_blocks: list[np.ndarray] = []
+    relbearing_blocks: list[np.ndarray] = []
+    orientation_blocks: list[np.ndarray] = []
+    cast_blocks: list[np.ndarray] = []
+    xsi_energy_blocks: list[np.ndarray] = []
+    valid_windows: list[CalibrationWindow] = []
+    excluded: list[ExcludedWindow] = []
+    offset = 0
+    cast_axis: np.ndarray | None = None
+    for candidate in candidate_windows:
+        result, small = read_small_slice(
+            paths_config,
+            mapping,
+            mapping_path=Path(mapping_path),
+            limits=limits,
+            depth_window=DepthWindow(candidate.depth_start, candidate.depth_stop),
+            depth_reference_arrays=depth_reference_arrays,
+        )
+        reasons: list[str] = []
+        if result.errors:
+            reasons.extend(f"small_slice_error:{error}" for error in result.errors)
+        required = {"cast_depth", "cast_zc", "pose_depth", "pose_rel_bearing_deg", "xsi_waveform"}
+        missing = sorted(required.difference(small))
+        reasons.extend(f"missing_array:{name}" for name in missing)
+        if reasons:
+            excluded.append(
+                ExcludedWindow(candidate.window_id, offset, offset, reasons)
+            )
+            continue
+        cast_depth = np.asarray(small["cast_depth"], dtype=np.float32).reshape(-1)
+        cast_zc = np.asarray(small["cast_zc"], dtype=np.float32)
+        rel = _interp_on_depth(
+            np.asarray(small["pose_depth"], dtype=np.float32),
+            np.asarray(small["pose_rel_bearing_deg"], dtype=np.float32),
+            cast_depth,
+        )
+        orient = _interp_on_depth(orientation_depth, orientation_confidence, cast_depth)
+        energy = _xsi_energy_on_depth(small, cast_depth)
+        count = min(cast_depth.size, cast_zc.shape[0], energy.shape[0], rel.size, orient.size)
+        if count < 2:
+            excluded.append(
+                ExcludedWindow(candidate.window_id, offset, offset, ["small_slice_too_short"])
+            )
+            continue
+        cast_depth = cast_depth[:count]
+        cast_zc = cast_zc[:count]
+        rel = rel[:count]
+        orient = orient[:count]
+        energy = energy[:count]
+        cast_contrast = cast_azimuthal_contrast(cast_zc)
+        xsi_contrast = xsi_side_energy_contrast(energy)
+        reasons = []
+        if cast_contrast is None or cast_contrast <= 0.0:
+            reasons.append("low_cast_azimuthal_contrast")
+        if xsi_contrast is None or xsi_contrast <= 0.0:
+            reasons.append("low_xsi_side_energy_contrast")
+        if reasons:
+            excluded.append(ExcludedWindow(candidate.window_id, offset, offset, reasons))
+            continue
+        start = offset
+        stop = offset + count
+        valid_windows.append(
+            CalibrationWindow(
+                window_id=candidate.window_id,
+                start_index=start,
+                stop_index=stop,
+                depth_min=float(np.nanmin(cast_depth)),
+                depth_max=float(np.nanmax(cast_depth)),
+                orientation_confidence_mean=_nanmean_or_none(orient),
+                relbearing_jump_max_deg=_max_relbearing_jump(rel),
+                cast_azimuthal_contrast=cast_contrast,
+                xsi_side_energy_contrast=xsi_contrast,
+                quality_score=float((cast_contrast or 0.0) + (xsi_contrast or 0.0)),
+            )
+        )
+        depth_blocks.append(cast_depth)
+        relbearing_blocks.append(rel)
+        orientation_blocks.append(orient)
+        cast_blocks.append(cast_zc)
+        xsi_energy_blocks.append(energy)
+        if "cast_azimuth_deg" in small:
+            cast_axis = np.asarray(small["cast_azimuth_deg"], dtype=np.float32)
+        offset = stop
+
+    arrays = _empty_scanned_arrays(cast_axis)
+    if depth_blocks:
+        arrays = {
+            "depth": np.concatenate(depth_blocks).astype(np.float32),
+            "relbearing_deg": np.concatenate(relbearing_blocks).astype(np.float32),
+            "orientation_confidence": np.concatenate(orientation_blocks).astype(np.float32),
+            "cast_zc": np.concatenate(cast_blocks, axis=0).astype(np.float32),
+            "xsi_side_energy": np.concatenate(xsi_energy_blocks, axis=0).astype(np.float32),
+            "cast_azimuth_axis_deg": (
+                cast_axis.astype(np.float32)
+                if cast_axis is not None
+                else np.linspace(
+                    0.0,
+                    360.0,
+                    num=cast_blocks[0].shape[1],
+                    endpoint=False,
+                    dtype=np.float32,
+                )
+            ),
+        }
+    return arrays, valid_windows, excluded
 
 
 def _score_hypotheses(
@@ -916,6 +1429,42 @@ def _interp_on_depth(
     return np.interp(target, source[finite][order], vals[finite][order]).astype(np.float32)
 
 
+def _xsi_energy_on_depth(small: dict[str, np.ndarray], target_depth: np.ndarray) -> np.ndarray:
+    waveform = np.asarray(small["xsi_waveform"], dtype=np.float32)
+    energy = xsi_side_rms_energy(waveform)
+    if "xsi_depth" not in small:
+        return energy[: target_depth.size]
+    xsi_depth = np.asarray(small["xsi_depth"], dtype=np.float32)
+    if xsi_depth.ndim == 2:
+        source_depth = np.nanmedian(xsi_depth, axis=0)
+    else:
+        source_depth = xsi_depth.reshape(-1)
+    output = np.empty((target_depth.size, energy.shape[1]), dtype=np.float32)
+    for side_index in range(energy.shape[1]):
+        output[:, side_index] = _interp_on_depth(
+            source_depth,
+            energy[:, side_index],
+            target_depth,
+        )
+    return output
+
+
+def _empty_scanned_arrays(cast_axis: np.ndarray | None = None) -> dict[str, np.ndarray]:
+    axis = (
+        np.asarray(cast_axis, dtype=np.float32).reshape(-1)
+        if cast_axis is not None
+        else np.linspace(0.0, 360.0, num=180, endpoint=False, dtype=np.float32)
+    )
+    return {
+        "depth": np.empty((0,), dtype=np.float32),
+        "relbearing_deg": np.empty((0,), dtype=np.float32),
+        "orientation_confidence": np.empty((0,), dtype=np.float32),
+        "cast_zc": np.empty((0, axis.size), dtype=np.float32),
+        "xsi_side_energy": np.empty((0, 8), dtype=np.float32),
+        "cast_azimuth_axis_deg": axis,
+    }
+
+
 def _cast_axis(cast_zc: np.ndarray, raw_axis_deg: np.ndarray | None) -> np.ndarray:
     count = int(np.asarray(cast_zc).shape[1])
     if raw_axis_deg is None:
@@ -924,6 +1473,58 @@ def _cast_axis(cast_zc: np.ndarray, raw_axis_deg: np.ndarray | None) -> np.ndarr
     if axis.size != count:
         return np.linspace(0.0, 360.0, num=count, endpoint=False, dtype=np.float32)
     return axis
+
+
+def _read_json(path: Path | str) -> dict[str, Any]:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"JSON file must contain an object: {path}")
+    return data
+
+
+def _first_float(*values: Any) -> float | None:
+    for value in values:
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _exclude_interval_unit_warnings(
+    intervals: list[ExcludeInterval],
+    depth_unit: str,
+) -> list[str]:
+    warnings: list[str] = []
+    for interval in intervals:
+        if not _interval_unit_matches(interval.unit, depth_unit):
+            warnings.append(
+                "Ignoring exclude interval "
+                f"{interval.start_depth}..{interval.stop_depth} {interval.unit}: "
+                f"depth_unit={depth_unit}; no unit conversion is applied."
+            )
+    return warnings
+
+
+def _interval_unit_matches(interval_unit: str, depth_unit: str) -> bool:
+    normalized_interval = interval_unit.lower()
+    normalized_depth = depth_unit.lower()
+    if normalized_depth in {"unknown", "unknown_to_verify", ""}:
+        return normalized_interval in {"unknown", "unknown_to_verify", ""}
+    return normalized_interval == normalized_depth
+
+
+def _interval_overlaps(
+    start_a: float,
+    stop_a: float,
+    start_b: float,
+    stop_b: float,
+) -> bool:
+    lo_b = min(start_b, stop_b)
+    hi_b = max(start_b, stop_b)
+    return max(start_a, lo_b) < min(stop_a, hi_b)
 
 
 def _max_relbearing_jump(relbearing_deg: np.ndarray) -> float | None:

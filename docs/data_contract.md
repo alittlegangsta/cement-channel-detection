@@ -805,9 +805,10 @@ decision 必须为 `no_go`。
 
 MVP-2 gate 为 `conditional_go` 且 RelBearing 仍为
 `documentation_preferred_plus_data_unresolved` 时，可执行 MVP-2C 人工审查与多假设
-校准。该阶段只允许读取 depth-only、orientation confidence、overlap-targeted
-small-slice 和 overlap resample preview，不得读取完整 XSI waveform 或 full
-`CAST.Zc`。
+校准。该阶段应先从 `depth_only_v001.npz`、`orientation_confidence_v001.npz` 和
+depth grid overlap 中主动扫描多个高质量候选窗口，再对入选窗口按需读取局部
+small-slice。不得把单个 fallback window 当作有效证据；每个窗口仍必须保持
+small-slice 限制，不得读取完整 XSI waveform 或 full `CAST.Zc`。
 
 必须比较的假设空间：
 
@@ -823,6 +824,7 @@ side_a_offset_deg = 0,45,90,135,180,225,270,315
 ```text
 /home/xiaoj/cement-channel-data/reports/relbearing_calibration_report.md
 /home/xiaoj/cement-channel-data/reports/relbearing_calibration_report.json
+/home/xiaoj/cement-channel-data/reports/relbearing_candidate_windows.md
 /home/xiaoj/cement-channel-data/reports/relbearing_manual_review/
 ```
 
@@ -836,11 +838,16 @@ XSI side energy raw / plus-minus / side-order 对比图、hypothesis score summa
 至少 5 个有效窗口才允许 data-supported recommendation
 至少 70% 有效窗口支持同一候选
 best-vs-second score gap 必须超过阈值
+fallback_window_counted_as_evidence = false
 不满足时 final_recommendation = unresolved_keep_plus_primary_minus_ablation
 满足时也只能输出 recommendation，不得写成 confirmed
 single_sign_alignment_approved = false
 production_alignment_config_written = false
 ```
+
+人工排除区间可通过 `no_eccentric_or_rb_unreliable_intervals` 提供，但必须与项目内部
+depth 单位一致。若排除区间使用 `ft` 而内部 depth 轴为 `m` 或 `unknown_to_verify`，
+不得直接混用；必须先转换单位或记录 TODO / warning。
 
 ---
 

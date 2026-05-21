@@ -9,6 +9,19 @@ decision_rules:
   min_valid_windows: 5
   min_support_ratio: 0.7
   min_score_gap: 0.05
+  fallback_window_counted_as_evidence: false
+window_scan:
+  scan_depth_windows: true
+  depth_window_size: 2.0
+  min_orientation_confidence: 0.5
+  min_inc_deg: 5.0
+  max_relbearing_jump_deg: 45.0
+no_eccentric_or_rb_unreliable_intervals:
+- start_depth: 2732
+  stop_depth: 4132
+  unit: ft
+  reason: PPT indicates no eccentric tool and RB unreliable
+  unit_note: Do not apply to non-ft internal depth units without explicit conversion.
 hypothesis_space:
   relbearing_sign:
   - plus
