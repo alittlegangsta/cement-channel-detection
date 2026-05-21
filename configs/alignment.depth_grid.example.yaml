@@ -1,0 +1,59 @@
+schema_version: schema_v001
+alignment_config_version: alignment_depth_grid_v001
+status: example_requires_human_review
+source_report: reports/depth_axis_audit_report.json
+canonical_depth_grid:
+  depth_start: 2395.445068359375
+  depth_stop: 5759.303466796875
+  depth_step: 0.4814453125
+  sample_count: 6988
+  grid_order: increasing
+  depth_unit: unknown_to_verify
+  allow_extrapolation: false
+  step_strategy: coarsest_median_step
+quality_gate:
+  proposal_decision: conditional_go
+  requires_human_review: true
+  warnings:
+  - 'cast_depth: cast_depth is decreasing in raw order; reverse before interpolation.'
+  - 'pose_depth: pose_depth is mostly decreasing with 23 forward and 0 duplicate steps;
+    reverse and de-duplicate before interpolation.'
+  - 'xsi_depth_receiver_01: xsi_depth_receiver_01 is mostly decreasing with 2 forward
+    and 9 duplicate steps; reverse and de-duplicate before interpolation.'
+  - 'xsi_depth_receiver_02: xsi_depth_receiver_02 is mostly decreasing with 2 forward
+    and 9 duplicate steps; reverse and de-duplicate before interpolation.'
+  - 'xsi_depth_receiver_03: xsi_depth_receiver_03 is mostly decreasing with 2 forward
+    and 9 duplicate steps; reverse and de-duplicate before interpolation.'
+  - 'xsi_depth_receiver_04: xsi_depth_receiver_04 is mostly decreasing with 2 forward
+    and 9 duplicate steps; reverse and de-duplicate before interpolation.'
+  - 'xsi_depth_receiver_05: xsi_depth_receiver_05 is mostly decreasing with 2 forward
+    and 9 duplicate steps; reverse and de-duplicate before interpolation.'
+  - 'xsi_depth_receiver_06: xsi_depth_receiver_06 is mostly decreasing with 2 forward
+    and 9 duplicate steps; reverse and de-duplicate before interpolation.'
+  - 'xsi_depth_receiver_07: xsi_depth_receiver_07 is mostly decreasing with 2 forward
+    and 9 duplicate steps; reverse and de-duplicate before interpolation.'
+  - 'xsi_depth_receiver_08: xsi_depth_receiver_08 is mostly decreasing with 2 forward
+    and 9 duplicate steps; reverse and de-duplicate before interpolation.'
+  - 'xsi_depth_receiver_09: xsi_depth_receiver_09 is mostly decreasing with 2 forward
+    and 9 duplicate steps; reverse and de-duplicate before interpolation.'
+  - 'xsi_depth_receiver_10: xsi_depth_receiver_10 is mostly decreasing with 2 forward
+    and 9 duplicate steps; reverse and de-duplicate before interpolation.'
+  - 'xsi_depth_receiver_11: xsi_depth_receiver_11 is mostly decreasing with 2 forward
+    and 9 duplicate steps; reverse and de-duplicate before interpolation.'
+  - 'xsi_depth_receiver_12: xsi_depth_receiver_12 is mostly decreasing with 2 forward
+    and 9 duplicate steps; reverse and de-duplicate before interpolation.'
+  - 'xsi_depth_receiver_13: xsi_depth_receiver_13 is mostly decreasing with 2 forward
+    and 9 duplicate steps; reverse and de-duplicate before interpolation.'
+  - depth unit is unknown_to_verify; conditional_go requires human review.
+  - Source depth median steps differ by 3.612x; proposal keeps the coarsest step.
+  - Depth unit is unknown_to_verify; human review remains required.
+  no_go_blockers: []
+not_performed:
+- MAT reading
+- waveform reading
+- CAST Zc reading
+- interpolation
+- alignment
+- label generation
+- feature extraction
+- model training

@@ -568,6 +568,239 @@ orientation_uncertain = true
 
 深度错位估计的单位必须与 `/axis/depth` 一致。
 
+#### 7.4.1 MVP-2 depth axis audit artifacts
+
+MVP-2 进入正式插值或标签前，必须先生成 depth-only 审计报告：
+
+```text
+/home/xiaoj/cement-channel-data/reports/depth_axis_audit_report.md
+/home/xiaoj/cement-channel-data/reports/depth_axis_audit_report.json
+```
+
+该报告只允许读取 `CAST.Depth`、`XSILMR{receiver}.Depth` 和 `Depth_inc`，
+不得读取完整 XSI waveform 或完整 `CAST.Zc`。报告至少记录：
+
+```text
+cast_depth length/min/max/monotonic/median_step/nan_count/duplicate_count
+xsi_depth per receiver length/min/max/monotonic/median_step/nan_count/duplicate_count
+pose_depth length/min/max/monotonic/median_step/nan_count/duplicate_count
+receiver-to-receiver depth consistency
+common overlap interval
+candidate canonical depth grid
+warnings/errors/no-go blockers
+```
+
+如果 depth unit 仍为 `unknown_to_verify`，MVP-2 可保留 `conditional_go`，
+但必须在报告 warning 中记录并等待人工复核。
+
+#### 7.4.2 MVP-2 canonical depth grid proposal artifacts
+
+Depth audit 通过或 `conditional_go` 后，必须生成受控验证用 canonical depth grid
+proposal：
+
+```text
+/home/xiaoj/cement-channel-data/reports/depth_grid_proposal.md
+/home/xiaoj/cement-channel-data/reports/depth_grid_proposal.json
+configs/alignment.depth_grid.example.yaml
+```
+
+该阶段只允许读取 `depth_axis_audit_report.json`，不得读取 MAT、waveform 或
+`CAST.Zc`。proposal 必须记录：
+
+```text
+common_overlap_min/max
+depth_start/depth_stop
+depth_step
+sample_count
+grid_order = increasing
+allow_extrapolation = false
+step selection rationale
+warnings/errors/no-go blockers
+```
+
+若不同来源的 median depth step 差异较大，可以继续输出保守 grid，但必须记录
+warning；若 `depth_start`、`depth_stop` 或 `depth_step` 无法明确计算，则为
+`no_go`，不得进入插值预览。
+
+#### 7.4.3 MVP-2 controlled depth-only reader artifacts
+
+Depth grid proposal 明确后，MVP-2 可生成 depth-only / pose-only 受控读取结果：
+
+```text
+/home/xiaoj/cement-channel-data/interim/depth_only_v001.npz
+/home/xiaoj/cement-channel-data/interim/depth_only_summary_v001.json
+```
+
+该文件只允许包含：
+
+```text
+cast_depth
+xsi_depth_by_receiver
+pose_depth
+inc_deg
+relbearing_deg
+```
+
+该阶段不得读取或保存 XSI waveform、完整 `CAST.Zc`、弱标签、特征或模型输入。
+summary JSON 必须记录 shape、dtype、finite ratio、范围、warnings/errors 和
+`not_performed`。
+
+#### 7.4.4 MVP-2 small-slice depth resampling preview artifacts
+
+Controlled depth-only reader 与 depth grid proposal 均可用后，可生成小片段插值预览：
+
+```text
+/home/xiaoj/cement-channel-data/interim/depth_resample_preview_v001.npz
+/home/xiaoj/cement-channel-data/reports/depth_resample_preview_report.md
+/home/xiaoj/cement-channel-data/reports/depth_resample_preview_report.json
+```
+
+该阶段只验证数据能否映射到 proposed canonical depth grid，不得保存正式
+aligned HDF5。允许内容包括：
+
+```text
+canonical_depth
+source index on grid for CAST / pose / XSI receiver depth
+pose Inc / RelBearing interpolation preview
+small-slice CAST.Zc interpolation preview, only when small-slice depth overlaps the grid
+small-slice XSI waveform interpolation preview, only when small-slice depth overlaps the grid
+valid masks and interpolation NaN / extrapolation statistics
+```
+
+默认禁止外推；若 small-slice 的 CAST / XSI 首段不覆盖 proposed grid，只能记录
+`skipped_no_common_overlap` warning，不得读取全量 waveform 或 full `CAST.Zc` 来补齐。
+
+#### 7.4.4b MVP-2 overlap-targeted small-slice artifacts
+
+若默认 `small_slice_v001.npz` 与 proposed canonical grid 没有共同覆盖，可在共同
+overlap 中部重新读取受控小片段：
+
+```text
+/home/xiaoj/cement-channel-data/interim/small_slice_overlap_v001.npz
+/home/xiaoj/cement-channel-data/interim/small_slice_overlap_summary_v001.json
+/home/xiaoj/cement-channel-data/interim/depth_resample_overlap_preview_v001.npz
+/home/xiaoj/cement-channel-data/reports/depth_resample_overlap_preview_report.md
+/home/xiaoj/cement-channel-data/reports/depth_resample_overlap_preview_report.json
+```
+
+默认窗口来自 `depth_grid_proposal.json` 的 common overlap 中点，窗口长度不得超过
+2.0 m，默认 `max_depth_samples` 和 `max_time_samples` 必须保持小片段规模。
+该流程可按 depth offset 读取 MAT 中的局部 `CAST.Zc` 与 XSI waveform，但不得读取
+full waveform 或 full `CAST.Zc`。
+
+若 overlap-targeted slice 仍不能形成 CAST / XSI / pose 共同覆盖，报告必须写入
+error 并停止 RelBearing 证据增强。
+
+#### 7.4.5 MVP-2 RelBearing angle utilities
+
+RelBearing 方位归一化必须先实现独立、可测试的角度工具，再进入符号验证：
+
+```text
+wrap_deg(theta) -> [0, 360)
+circular_distance_deg(theta_a, theta_b)
+circular_mean_deg(theta, weights)
+theta_aligned_plus  = (theta_raw + RelBearing) mod 360
+theta_aligned_minus = (theta_raw - RelBearing) mod 360
+theta_no_rotation   = theta_raw mod 360
+orientation_confidence from Inc
+orientation_uncertain low-inc mask
+```
+
+此阶段不得选择最终 plus/minus 符号，不得生成标签。若 Side A 的物理零度未确认，
+`xsi_side_azimuth_deg` 仍必须来自配置或显式候选，不得在正式 alignment 中硬编码。
+
+Overlap-targeted RelBearing validation 可额外输出：
+
+```text
+/home/xiaoj/cement-channel-data/reports/relbearing_sign_validation_overlap_report.md
+/home/xiaoj/cement-channel-data/reports/relbearing_sign_validation_overlap_report.json
+```
+
+即使 overlap-targeted preview 有 CAST/XSI 小片段证据，若 plus/minus 仍无法区分，
+decision 必须保持 `insufficient_evidence`，不得自动写入正式 alignment 配置。
+
+Halliburton RB / Relative Bearing 文档定义下，若 raw side azimuth 以 tool key 为
+`0°`，且 looking downhole 顺时针增加，则文档优先公式为：
+
+```text
+theta_aligned = (theta_raw + RelBearing) mod 360
+```
+
+MVP-2 当前状态必须记录为：
+
+```text
+relbearing_sign_status: documentation_preferred_plus_data_unresolved
+documentation_preferred_sign: plus
+data_driven_validation: insufficient_evidence
+single_sign_alignment_approved: false
+approved_downstream_mode: plus_primary_minus_ablation
+```
+
+该状态不等同于 `confirmed_plus`。Side A-H 相对 tool key 的顺序尚未独立确认，
+导出矩阵 / 图像方向仍可能存在 looking-uphole / looking-downhole 翻转，因此不得生成
+single-sign production alignment。后续只能以 documentation-preferred plus 为主候选、
+minus 为对照消融的 dual-sign / ablation 模式进入下一阶段。
+
+#### 7.4.6 MVP-2 orientation confidence artifacts
+
+RelBearing plus/minus 符号未确认时，仍可独立基于 `Inc` 生成高边方向稳定性
+mask。该阶段输入仅为受控 depth-only 输出：
+
+```text
+/home/xiaoj/cement-channel-data/interim/depth_only_v001.npz
+```
+
+输出：
+
+```text
+/home/xiaoj/cement-channel-data/interim/orientation_confidence_v001.npz
+/home/xiaoj/cement-channel-data/reports/orientation_confidence_report.md
+/home/xiaoj/cement-channel-data/reports/orientation_confidence_report.json
+```
+
+`orientation_confidence_v001.npz` 必须至少包含：
+
+```text
+pose_depth
+inc_deg
+orientation_confidence
+low_inc_mask
+stable_inc_mask
+orientation_uncertain
+```
+
+默认阈值：
+
+```text
+I_min_deg = 1.0
+I_stable_deg = 5.0
+Inc <= I_min_deg      -> orientation_confidence = 0
+Inc >= I_stable_deg   -> orientation_confidence = 1
+I_min < Inc < I_stable -> linear transition
+```
+
+报告必须记录 Inc min/max/mean、low-inclination 样本比例、stable-inclination
+样本比例、orientation confidence 分布、warnings/errors，并明确该 mask 与
+RelBearing plus/minus sign 无关。
+
+#### 7.4.7 MVP-2 gate report artifacts
+
+MVP-2 完成 depth audit、depth grid proposal、depth-only reader、overlap-targeted
+resampling、RelBearing validation 和 orientation confidence 后，必须生成：
+
+```text
+/home/xiaoj/cement-channel-data/reports/mvp2_gate_report.md
+/home/xiaoj/cement-channel-data/reports/mvp2_gate_report.json
+```
+
+若 depth axes valid、depth grid exists、depth-only reader works、overlap-targeted
+resampling works、orientation confidence exists，且 RelBearing 状态为
+`documentation_preferred_plus_data_unresolved`，gate decision 必须为
+`conditional_go`。该 conditional go 只允许进入 MVP-3 的
+`plus_primary_minus_ablation` workflow，不允许 single-sign production alignment、
+直接生成最终弱标签、feature extraction 或 model training。若存在 blocking errors，
+decision 必须为 `no_go`。
+
 ---
 
 ### 7.5 `/quality`
