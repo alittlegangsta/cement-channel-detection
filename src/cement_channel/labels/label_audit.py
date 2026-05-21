@@ -246,20 +246,37 @@ def _component_summary(
             right_id = int(center[other_row, -1])
             if left_id > 0 and right_id > 0:
                 _union(parent, left_id, right_id)
-    grouped: dict[int, list[tuple[np.ndarray, np.ndarray]]] = {}
-    for component_id in component_ids:
-        root = _find(parent, int(component_id))
-        grouped.setdefault(root, [])
-        grouped[root].append(np.where(center == component_id))
+    rows_all, cols_all = np.where(center > 0)
+    label_ids = center[rows_all, cols_all]
+    roots = np.asarray([_find(parent, int(label_id)) for label_id in label_ids], dtype=np.int32)
+    if roots.size == 0:
+        return ComponentSummary(
+            component_count=0,
+            object_depth_length_m=_stats([]),
+            object_azimuth_width_deg=_stats([]),
+            isolated_speckle_ratio=None,
+        )
+    unique_roots, inverse = np.unique(roots, return_inverse=True)
+    order = np.argsort(inverse)
+    sorted_inverse = inverse[order]
+    sorted_rows = rows_all[order]
+    sorted_cols = cols_all[order]
+    bounds = np.concatenate(
+        [
+            np.array([0], dtype=np.int64),
+            np.flatnonzero(np.diff(sorted_inverse)) + 1,
+            np.array([sorted_inverse.size], dtype=np.int64),
+        ]
+    )
     depth_lengths: list[float] = []
     azimuth_widths: list[float] = []
     isolated_cells = 0
     total_cells = int(np.count_nonzero(candidate))
     depth_step = _median_step(depth)
     azimuth_step = _median_step(azimuth) or (360.0 / max(azimuth_count, 1))
-    for positions in grouped.values():
-        rows = np.concatenate([item[0] for item in positions])
-        cols = np.concatenate([item[1] for item in positions])
+    for start, stop in zip(bounds[:-1], bounds[1:], strict=False):
+        rows = sorted_rows[start:stop]
+        cols = sorted_cols[start:stop]
         if rows.size == 0:
             continue
         area = int(rows.size)
@@ -268,7 +285,7 @@ def _component_summary(
         depth_lengths.append((float(rows.max() - rows.min()) + 1.0) * depth_step)
         azimuth_widths.append(float(np.unique(cols).size) * azimuth_step)
     return ComponentSummary(
-        component_count=len(grouped),
+        component_count=int(unique_roots.size),
         object_depth_length_m=_stats(depth_lengths),
         object_azimuth_width_deg=_stats(azimuth_widths),
         isolated_speckle_ratio=None if total_cells == 0 else isolated_cells / total_cells,
