@@ -12,14 +12,66 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from cement_channel.alignment.relbearing_validation import (  # noqa: E402
-    DOCUMENTATION_PREFERRED_CONCLUSION,
-)
 from cement_channel.data.manifest import ManifestBuildError, load_paths_config  # noqa: E402
 
 
 class MVP2GateReportError(RuntimeError):
     """Raised when the MVP-2 gate report cannot be generated safely."""
+
+
+LEGACY_DOCUMENTATION_STATUS = "documentation_preferred_plus_data_unresolved"
+SPECIFICATION_PREFERRED_STATUS = "specification_preferred_plus_data_unresolved"
+SPECIFICATION_PREFERRED_CONCLUSION: dict[str, Any] = {
+    "relbearing_sign_status": SPECIFICATION_PREFERRED_STATUS,
+    "documentation_preferred_sign": "plus",
+    "primary_convention": "plus",
+    "ablation_convention": "minus",
+    "documentation_formula": "theta_aligned = (theta_raw + RelBearing) mod 360",
+    "data_driven_validation": "insufficient_evidence",
+    "single_sign_alignment_approved": False,
+    "single_sign_alignment_approval_basis": "specification_only_not_data_confirmed",
+    "approved_downstream_mode": "plus_primary_minus_ablation",
+    "documentation_basis": (
+        "Halliburton Relative Bearing documentation suggests a plus convention when raw side "
+        "azimuth is clockwise from tool key and measured looking downhole."
+    ),
+    "manual_confirmations": {
+        "side_a_aligned_with_cast_0deg": True,
+        "side_a_offset_deg": 0.0,
+        "side_a_offset_status": "manually_confirmed",
+        "xsi_side_order": "clockwise",
+        "xsi_side_order_status": "manually_confirmed",
+        "cast_azimuth_direction": "normal",
+        "cast_azimuth_values": "0,2,4,...,358",
+        "cast_azimuth_direction_status": "manually_confirmed",
+    },
+    "xsi_geometry": {
+        "receiver_count": 13,
+        "reference_receiver_index": 7,
+        "receiver_spacing_ft": 0.5,
+        "source_to_receiver1_ft": 1.0,
+        "source_to_reference_receiver_ft": 4.0,
+        "receiver_offsets_from_R7_ft": {
+            "R1": -3.0,
+            "R2": -2.5,
+            "R3": -2.0,
+            "R4": -1.5,
+            "R5": -1.0,
+            "R6": -0.5,
+            "R7": 0.0,
+            "R8": 0.5,
+            "R9": 1.0,
+            "R10": 1.5,
+            "R11": 2.0,
+            "R12": 2.5,
+            "R13": 3.0,
+        },
+    },
+    "unresolved_assumptions": [
+        "Data-driven plus/minus/no/random metrics are not sign-discriminative.",
+        "Plus is specification-preferred, not data-confirmed.",
+    ],
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -164,8 +216,7 @@ def _build_gate_report(paths: dict[str, Path]) -> dict[str, Any]:
     decision = _decision(blocking, relbearing_conclusion)
     unresolved = [
         "Data-driven RelBearing sign validation remains insufficient_evidence.",
-        "Side A-H ordering relative to tool key is unconfirmed.",
-        "Exported matrix orientation may include looking-uphole / looking-downhole flips.",
+        "Plus is specification-preferred but not data-confirmed.",
         "Depth unit remains unknown_to_verify in current audit/proposal warnings.",
         "Low-inclination intervals require orientation_uncertain handling.",
     ]
@@ -179,12 +230,19 @@ def _build_gate_report(paths: dict[str, Path]) -> dict[str, Any]:
         "documentation_preferred_convention": relbearing_conclusion[
             "documentation_preferred_sign"
         ],
+        "primary_convention": relbearing_conclusion["primary_convention"],
+        "ablation_convention": relbearing_conclusion["ablation_convention"],
         "documentation_formula": relbearing_conclusion["documentation_formula"],
         "data_driven_validation": relbearing_conclusion["data_driven_validation"],
         "single_sign_alignment_approved": relbearing_conclusion[
             "single_sign_alignment_approved"
         ],
+        "single_sign_alignment_approval_basis": relbearing_conclusion[
+            "single_sign_alignment_approval_basis"
+        ],
         "approved_downstream_mode": relbearing_conclusion["approved_downstream_mode"],
+        "manual_confirmations": relbearing_conclusion["manual_confirmations"],
+        "xsi_geometry": relbearing_conclusion["xsi_geometry"],
         "blocking_issues": blocking,
         "warnings": warnings,
         "unresolved_issues": unresolved,
@@ -363,21 +421,42 @@ def _orientation_confidence_status(path: Path) -> dict[str, Any]:
 def _relbearing_conclusion(overlap_status: dict[str, Any]) -> dict[str, Any]:
     details = _as_dict(overlap_status.get("details"))
     report_conclusion = _as_dict(details.get("convention_conclusion"))
+    conclusion = dict(SPECIFICATION_PREFERRED_CONCLUSION)
     if report_conclusion:
-        conclusion = dict(DOCUMENTATION_PREFERRED_CONCLUSION)
         conclusion.update(report_conclusion)
-        return conclusion
-    return dict(DOCUMENTATION_PREFERRED_CONCLUSION)
+    if conclusion.get("relbearing_sign_status") == LEGACY_DOCUMENTATION_STATUS:
+        conclusion["relbearing_sign_status"] = SPECIFICATION_PREFERRED_STATUS
+    conclusion["primary_convention"] = "plus"
+    conclusion["ablation_convention"] = "minus"
+    conclusion["documentation_preferred_sign"] = "plus"
+    conclusion["documentation_formula"] = SPECIFICATION_PREFERRED_CONCLUSION[
+        "documentation_formula"
+    ]
+    conclusion["single_sign_alignment_approval_basis"] = (
+        "specification_only_not_data_confirmed"
+    )
+    conclusion["approved_downstream_mode"] = "plus_primary_minus_ablation"
+    conclusion["manual_confirmations"] = SPECIFICATION_PREFERRED_CONCLUSION[
+        "manual_confirmations"
+    ]
+    conclusion["xsi_geometry"] = SPECIFICATION_PREFERRED_CONCLUSION["xsi_geometry"]
+    conclusion["unresolved_assumptions"] = SPECIFICATION_PREFERRED_CONCLUSION[
+        "unresolved_assumptions"
+    ]
+    conclusion.pop("unconfirmed_assumptions", None)
+    return conclusion
 
 
 def _relbearing_blockers(conclusion: dict[str, Any]) -> list[str]:
     blockers: list[str] = []
-    if conclusion.get("relbearing_sign_status") != "documentation_preferred_plus_data_unresolved":
+    if conclusion.get("relbearing_sign_status") != SPECIFICATION_PREFERRED_STATUS:
         blockers.append(
-            "RelBearing sign status is not documentation_preferred_plus_data_unresolved."
+            f"RelBearing sign status is not {SPECIFICATION_PREFERRED_STATUS}."
         )
-    if conclusion.get("documentation_preferred_sign") != "plus":
-        blockers.append("Documentation-preferred RelBearing sign is not plus.")
+    if conclusion.get("primary_convention") != "plus":
+        blockers.append("Primary RelBearing convention is not plus.")
+    if conclusion.get("ablation_convention") != "minus":
+        blockers.append("Ablation RelBearing convention is not minus.")
     if conclusion.get("data_driven_validation") != "insufficient_evidence":
         blockers.append("Data-driven RelBearing validation is not insufficient_evidence.")
     if conclusion.get("single_sign_alignment_approved") is not False:
@@ -390,7 +469,7 @@ def _relbearing_blockers(conclusion: dict[str, Any]) -> list[str]:
 def _decision(blocking: list[str], conclusion: dict[str, Any]) -> str:
     if blocking:
         return "no_go"
-    if conclusion.get("relbearing_sign_status") == "documentation_preferred_plus_data_unresolved":
+    if conclusion.get("relbearing_sign_status") == SPECIFICATION_PREFERRED_STATUS:
         return "conditional_go"
     return "no_go"
 
@@ -403,9 +482,15 @@ def _format_markdown(report: dict[str, Any]) -> str:
         f"- Decision: {report['decision']}",
         f"- Next recommended stage: {report['next_recommended_stage']}",
         f"- Documentation-preferred convention: {report['documentation_preferred_convention']}",
+        f"- Primary convention: {report['primary_convention']}",
+        f"- Ablation convention: {report['ablation_convention']}",
         f"- Data-driven validation: {report['data_driven_validation']}",
         f"- Approved downstream mode: {report['approved_downstream_mode']}",
         f"- Single-sign alignment approved: {report['single_sign_alignment_approved']}",
+        (
+            "- Single-sign alignment approval basis: "
+            f"{report['single_sign_alignment_approval_basis']}"
+        ),
         "",
         "## Status Summary",
         "",
@@ -414,8 +499,8 @@ def _format_markdown(report: dict[str, Any]) -> str:
         lines.append(f"- {name}: {status['status']}")
     lines.extend(["", "## RelBearing Convention", ""])
     for key, value in report["relbearing_convention"].items():
-        if key == "unconfirmed_assumptions":
-            lines.append("- unconfirmed_assumptions:")
+        if key in {"unconfirmed_assumptions", "unresolved_assumptions"}:
+            lines.append(f"- {key}:")
             lines.extend(f"  - {item}" for item in value)
         else:
             lines.append(f"- {key}: {value}")

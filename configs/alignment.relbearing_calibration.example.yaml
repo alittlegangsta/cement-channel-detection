@@ -1,0 +1,54 @@
+schema_version: schema_v001
+calibration_config_version: relbearing_calibration_v001
+status: manual_review_required
+production_alignment_config: not_written
+single_sign_alignment_approved: false
+single_sign_alignment_approval_basis: specification_only_not_data_confirmed
+final_recommendation: unresolved_keep_plus_primary_minus_ablation
+recommendation: specification_preferred_plus_primary_minus_ablation
+relbearing_sign_status: specification_preferred_plus_data_unresolved
+primary_convention: plus
+ablation_convention: minus
+data_driven_validation: insufficient_evidence
+manual_confirmations:
+  side_a_aligned_with_cast_0deg: true
+  side_a_offset_deg: 0.0
+  side_a_offset_status: manually_confirmed
+  xsi_side_order: clockwise
+  xsi_side_order_status: manually_confirmed
+  cast_azimuth_direction: normal
+  cast_azimuth_direction_status: manually_confirmed
+  cast_azimuth_values: 0,2,4,...,358
+xsi_geometry_config: configs/xsi_geometry.example.yaml
+decision_rules:
+  min_valid_windows: 5
+  min_support_ratio: 0.7
+  min_score_gap: 0.05
+  fallback_window_counted_as_evidence: false
+window_scan:
+  scan_depth_windows: true
+  depth_window_size: 2.0
+  min_orientation_confidence: 0.5
+  min_inc_deg: 5.0
+  max_relbearing_jump_deg: 45.0
+no_eccentric_or_rb_unreliable_intervals:
+- start_depth: 2732
+  stop_depth: 4132
+  unit: ft
+  reason: PPT indicates no eccentric tool and RB unreliable
+  unit_note: Do not apply to non-ft internal depth units without explicit conversion.
+hypothesis_space:
+  relbearing_sign:
+  - plus
+  - minus
+  xsi_side_order:
+  - clockwise
+  cast_azimuth_direction:
+  - normal
+  side_a_offset_deg:
+  - 0.0
+notes:
+- This is a manual review/calibration example, not a production alignment config.
+- Side A offset, XSI side order, and CAST azimuth direction are manually confirmed.
+- Do not mark plus as data-confirmed from this file alone.
+- Continue plus-primary / minus-ablation downstream mode only.

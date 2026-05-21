@@ -18,22 +18,54 @@ from cement_channel.alignment.azimuth_normalization import (
 RELBEARING_VALIDATION_VERSION = "relbearing_sign_validation_v001"
 CANDIDATES = ["plus", "minus", "no_rotation", "random_rotation"]
 DOCUMENTATION_PREFERRED_CONCLUSION: dict[str, Any] = {
-    "relbearing_sign_status": "documentation_preferred_plus_data_unresolved",
+    "relbearing_sign_status": "specification_preferred_plus_data_unresolved",
     "documentation_preferred_sign": "plus",
+    "primary_convention": "plus",
+    "ablation_convention": "minus",
     "documentation_formula": "theta_aligned = (theta_raw + RelBearing) mod 360",
     "data_driven_validation": "insufficient_evidence",
     "single_sign_alignment_approved": False,
+    "single_sign_alignment_approval_basis": "specification_only_not_data_confirmed",
     "approved_downstream_mode": "plus_primary_minus_ablation",
     "documentation_basis": (
         "Halliburton Relative Bearing documentation suggests a plus convention when raw side "
         "azimuth is clockwise from tool key and measured looking downhole."
     ),
-    "unconfirmed_assumptions": [
-        "Side A-H ordering relative to tool key has not been independently confirmed.",
-        "Exported matrix or image orientation may still include looking-uphole / looking-downhole "
-        "flips.",
-        "Data-driven plus/minus/no/random metrics are not sign-discriminative in the current "
-        "small-slice evidence.",
+    "manual_confirmations": {
+        "side_a_aligned_with_cast_0deg": True,
+        "side_a_offset_deg": 0.0,
+        "side_a_offset_status": "manually_confirmed",
+        "xsi_side_order": "clockwise",
+        "xsi_side_order_status": "manually_confirmed",
+        "cast_azimuth_direction": "normal",
+        "cast_azimuth_values": "0,2,4,...,358",
+        "cast_azimuth_direction_status": "manually_confirmed",
+    },
+    "xsi_geometry": {
+        "receiver_count": 13,
+        "reference_receiver_index": 7,
+        "receiver_spacing_ft": 0.5,
+        "source_to_receiver1_ft": 1.0,
+        "source_to_reference_receiver_ft": 4.0,
+        "receiver_offsets_from_R7_ft": {
+            "R1": -3.0,
+            "R2": -2.5,
+            "R3": -2.0,
+            "R4": -1.5,
+            "R5": -1.0,
+            "R6": -0.5,
+            "R7": 0.0,
+            "R8": 0.5,
+            "R9": 1.0,
+            "R10": 1.5,
+            "R11": 2.0,
+            "R12": 2.5,
+            "R13": 3.0,
+        },
+    },
+    "unresolved_assumptions": [
+        "Data-driven plus/minus/no/random metrics are not sign-discriminative.",
+        "Plus is specification-preferred, not data-confirmed.",
     ],
 }
 
@@ -185,18 +217,26 @@ def format_relbearing_validation_markdown(report: RelBearingValidationReport) ->
         [
             f"- RelBearing sign status: {conclusion['relbearing_sign_status']}",
             f"- Documentation preferred sign: {conclusion['documentation_preferred_sign']}",
+            f"- Primary convention: {conclusion['primary_convention']}",
+            f"- Ablation convention: {conclusion['ablation_convention']}",
             f"- Formula: {conclusion['documentation_formula']}",
             f"- Data-driven validation: {conclusion['data_driven_validation']}",
             (
                 "- Single-sign alignment approved: "
                 f"{conclusion['single_sign_alignment_approved']}"
             ),
+            (
+                "- Single-sign alignment approval basis: "
+                f"{conclusion['single_sign_alignment_approval_basis']}"
+            ),
             f"- Approved downstream mode: {conclusion['approved_downstream_mode']}",
             f"- Documentation basis: {conclusion['documentation_basis']}",
-            "- Unconfirmed assumptions:",
+            f"- Manual confirmations: {conclusion['manual_confirmations']}",
+            f"- XSI geometry: {conclusion['xsi_geometry']}",
+            "- Unresolved assumptions:",
         ]
     )
-    lines.extend(f"  - {item}" for item in conclusion["unconfirmed_assumptions"])
+    lines.extend(f"  - {item}" for item in conclusion["unresolved_assumptions"])
     lines.extend(
         [
             "",
@@ -230,24 +270,31 @@ def relbearing_config_dict(report: RelBearingValidationReport) -> dict[str, Any]
     return {
         "schema_version": "schema_v001",
         "alignment_config_version": "alignment_relbearing_v001",
-        "status": "requires_human_confirmation",
-        "selected_convention": report.selected_convention or "unconfirmed",
+        "status": "specification_preferred_primary_data_unresolved",
+        "selected_convention": report.selected_convention or "plus_primary_minus_ablation",
         "relbearing_sign_status": conclusion["relbearing_sign_status"],
+        "primary_convention": conclusion["primary_convention"],
+        "ablation_convention": conclusion["ablation_convention"],
         "documentation_preferred_sign": conclusion["documentation_preferred_sign"],
         "documentation_formula": conclusion["documentation_formula"],
         "data_driven_validation": conclusion["data_driven_validation"],
         "single_sign_alignment_approved": conclusion["single_sign_alignment_approved"],
+        "single_sign_alignment_approval_basis": conclusion[
+            "single_sign_alignment_approval_basis"
+        ],
         "approved_downstream_mode": conclusion["approved_downstream_mode"],
         "documentation_basis": conclusion["documentation_basis"],
-        "unconfirmed_assumptions": conclusion["unconfirmed_assumptions"],
+        "manual_confirmations": conclusion["manual_confirmations"],
+        "xsi_geometry": conclusion["xsi_geometry"],
+        "unresolved_assumptions": conclusion["unresolved_assumptions"],
         "allowed_candidate_conventions": CANDIDATES,
         "manual_confirmation_required": report.manual_confirmation_required,
-        "mvp3_allowed_without_confirmation": report.mvp3_allowed_without_confirmation,
+        "mvp3_allowed_without_data_confirmation": "plus_primary_minus_ablation_only",
         "validation_decision": report.decision,
         "confidence": report.confidence,
         "notes": [
             "Do not mark plus as data-confirmed or production-approved.",
-            "MVP-3 may proceed only with plus as documentation-preferred primary and minus as "
+            "MVP-3 may proceed only with plus as specification-preferred primary and minus as "
             "ablation/control.",
             "Do not use this config for single-sign production alignment.",
         ],

@@ -72,4 +72,8 @@ def test_validate_relbearing_sign_cli_outputs_report_and_config(tmp_path: Path) 
     assert report["selected_convention"] is None
     assert report["manual_confirmation_required"] is True
     assert output_md.exists()
-    assert "selected_convention: unconfirmed" in output_config.read_text(encoding="utf-8")
+    config_text = output_config.read_text(encoding="utf-8")
+    assert "selected_convention: plus_primary_minus_ablation" in config_text
+    assert "relbearing_sign_status: specification_preferred_plus_data_unresolved" in config_text
+    assert "data_driven_validation: insufficient_evidence" in config_text
+    assert "single_sign_alignment_approved: false" in config_text
