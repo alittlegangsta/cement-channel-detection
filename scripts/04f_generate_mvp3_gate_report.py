@@ -19,6 +19,20 @@ class MVP3GateReportError(RuntimeError):
     """Raised when the MVP-3 gate report cannot be generated safely."""
 
 
+PROVISIONAL_RECOMMENDED_PARAMETER_SET = {
+    "alpha": 0.35,
+    "zc_min_limit": 2.5,
+    "severity_thresholds": [0.30, 0.45, 0.60],
+    "status": "provisional_after_sensitivity",
+    "requires_human_review": True,
+    "no_final_labels": True,
+    "preserve_plus_minus_ablation": True,
+    "mvp4_allowed": False,
+    "reason": "thresholds are provisional and plus/minus disagreement remains non-negligible",
+}
+NON_NEGLIGIBLE_PLUS_MINUS_DISAGREEMENT = 0.20
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate the MVP-3 gate report.")
     parser.add_argument(
@@ -135,17 +149,59 @@ def _build_gate_report(paths: dict[str, Path]) -> dict[str, Any]:
     if threshold_status == "requires_human_threshold_confirmation":
         warnings.append("weak_label_candidates: zc_min_limit requires human confirmation.")
 
+    coverage = _as_dict(weak_report.get("coverage")) if isinstance(weak_report, dict) else {}
+    plus_minus_disagreement = _as_float(coverage.get("plus_minus_disagreement"))
+    if (
+        plus_minus_disagreement is not None
+        and plus_minus_disagreement >= NON_NEGLIGIBLE_PLUS_MINUS_DISAGREEMENT
+    ):
+        warnings.append(
+            "weak_label_candidates: plus/minus disagreement remains non-negligible "
+            f"({plus_minus_disagreement:.6g})."
+        )
+
+    recommended_parameter_set = dict(PROVISIONAL_RECOMMENDED_PARAMETER_SET)
+    warnings.append(
+        "weak_label_candidates: recommended parameter set is provisional_after_sensitivity "
+        "and requires human review."
+    )
+
+    no_final_labels = (
+        _data_bool(weak_report, "no_final_labels")
+        and _data_bool(audit_report, "no_final_labels")
+        and _data_bool(review_report, "no_final_labels")
+    )
+    plus_minus_preserved = (
+        coverage.get("plus") is not None
+        and coverage.get("minus_ablation") is not None
+        and "minus_ablation" in _as_dict(weak_report.get("confidence"))
+    )
     decision = _decision(blocking, warnings)
+    mvp4_allowed = (
+        decision == "go"
+        and not recommended_parameter_set["requires_human_review"]
+        and plus_minus_disagreement is not None
+        and plus_minus_disagreement < NON_NEGLIGIBLE_PLUS_MINUS_DISAGREEMENT
+    )
     return {
         "stage": "MVP-3",
         "task": "cast_weak_label_candidate_gate",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "inputs": {key: str(path) for key, path in paths.items() if not key.startswith("output_")},
         "statuses": {key: _public_status(value) for key, value in statuses.items()},
+        "recommended_parameter_set": recommended_parameter_set,
+        "no_final_labels": no_final_labels,
+        "plus_primary_minus_ablation_preserved": plus_minus_preserved,
+        "plus_minus_disagreement": plus_minus_disagreement,
         "blocking_issues": blocking,
         "warnings": warnings,
         "decision": decision,
-        "mvp4_allowed": decision == "go",
+        "mvp4_allowed": mvp4_allowed,
+        "mvp4_allowed_reason": (
+            "all MVP-3 gate conditions resolved"
+            if mvp4_allowed
+            else recommended_parameter_set["reason"]
+        ),
         "conditional_requirements": _conditional_requirements(warnings),
         "not_allowed": [
             "final label approval",
@@ -230,6 +286,10 @@ def _conditional_requirements(warnings: list[str]) -> list[str]:
     requirements: list[str] = []
     if any("zc_min_limit" in warning for warning in warnings):
         requirements.append("Human confirmation required for zc_min_limit.")
+    if any("provisional_after_sensitivity" in warning for warning in warnings):
+        requirements.append("Human review required for provisional weak-label parameters.")
+    if any("plus/minus disagreement" in warning for warning in warnings):
+        requirements.append("Review plus/minus disagreement before any MVP-4 transition.")
     if warnings:
         requirements.append("Human review required for warning items before MVP-4.")
     return requirements
@@ -250,6 +310,21 @@ def _format_markdown(report: dict[str, Any]) -> str:
         f"- Generated at: {report['generated_at']}",
         f"- Decision: {report['decision']}",
         f"- MVP-4 allowed: {report['mvp4_allowed']}",
+        f"- MVP-4 allowed reason: {report['mvp4_allowed_reason']}",
+        f"- No final labels: {report['no_final_labels']}",
+        f"- Plus primary / minus ablation preserved: "
+        f"{report['plus_primary_minus_ablation_preserved']}",
+        "",
+        "## Recommended Parameter Set",
+        "",
+        f"- alpha: {report['recommended_parameter_set']['alpha']}",
+        f"- zc_min_limit: {report['recommended_parameter_set']['zc_min_limit']}",
+        "- severity_thresholds: "
+        f"{report['recommended_parameter_set']['severity_thresholds']}",
+        f"- status: {report['recommended_parameter_set']['status']}",
+        "- requires_human_review: "
+        f"{report['recommended_parameter_set']['requires_human_review']}",
+        f"- reason: {report['recommended_parameter_set']['reason']}",
         "",
         "## Statuses",
         "",

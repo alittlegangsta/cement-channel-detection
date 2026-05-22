@@ -969,6 +969,28 @@ no final label is falsely claimed
 若 label coverage 极端异常、plus/minus disagreement 极高、baseline 失效或阈值
 需要人工确认，gate 必须为 `conditional_go` 或 `no_go`。
 
+MVP-3R 人工审查后记录的 provisional 参数组为：
+
+```yaml
+recommended_parameter_set:
+  alpha: 0.35
+  zc_min_limit: 2.5
+  severity_thresholds: [0.30, 0.45, 0.60]
+  status: provisional_after_sensitivity
+  requires_human_review: true
+```
+
+该参数组只作为 weak-label candidate review 的中心点。由于 thresholds 仍为
+provisional，且 plus/minus disagreement 仍约 0.20，MVP-3 gate 必须继续保持
+`conditional_go`，并显式写出：
+
+```text
+no_final_labels = true
+plus primary / minus ablation preserved
+mvp4_allowed = false
+reason = thresholds are provisional and plus/minus disagreement remains non-negligible
+```
+
 MVP-3R 若发生以下任一情况，仍不得进入 MVP-4：
 
 ```text
