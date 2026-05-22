@@ -969,33 +969,47 @@ no final label is falsely claimed
 若 label coverage 极端异常、plus/minus disagreement 极高、baseline 失效或阈值
 需要人工确认，gate 必须为 `conditional_go` 或 `no_go`。
 
-MVP-3R 人工审查后记录的 provisional 参数组为：
+MVP-3H 人工审查后记录的 human-reviewed candidate 参数组为：
 
 ```yaml
 recommended_parameter_set:
   alpha: 0.35
   zc_min_limit: 2.5
   severity_thresholds: [0.30, 0.45, 0.60]
-  status: provisional_after_sensitivity
-  requires_human_review: true
+  status: human_reviewed_candidate_v001
+  final_label: false
 ```
 
-该参数组只作为 weak-label candidate review 的中心点。由于 thresholds 仍为
-provisional，且 plus/minus disagreement 仍约 0.20，MVP-3 gate 必须继续保持
+RelBearing plus 被记录为 human/specification approved primary convention，但
+`data_driven_validation` 仍为 `insufficient_evidence`。minus ablation 必须保留为
+audit/control，不能作为主训练标签：
+
+```yaml
+relbearing_label_policy:
+  primary: plus
+  primary_status: human_specification_approved
+  data_driven_validation: insufficient_evidence
+  minus_ablation_retained: true
+  minus_usage: audit_only
+  single_sign_final_label_approved: false
+```
+
+该参数组只作为 weak-label candidate_v001 参数。MVP-3 gate 必须继续保持
 `conditional_go`，并显式写出：
 
 ```text
 no_final_labels = true
 plus primary / minus ablation preserved
 mvp4_allowed = false
-reason = thresholds are provisional and plus/minus disagreement remains non-negligible
+reason = weak labels are human-reviewed candidates, but not final labels; MVP-4 requires separate approval
 ```
 
-MVP-3R 若发生以下任一情况，仍不得进入 MVP-4：
+MVP-3H 后若发生以下任一情况，仍不得进入 MVP-4：
 
 ```text
-zc_min_limit 仍使用 TODO_CONFIRM / conservative fallback
-alpha 或 severity thresholds 未经人工确认
+缺少单独 MVP-4 进入批准
+任何脚本声称生成 final labels
+plus primary / minus ablation 元数据丢失
 threshold sensitivity 未完成或显示 coverage 对参数高度不稳定
 bad-data mask 显示大面积 non-finite、Zc <= 0 或 relative_drop > 0.95
 confidence decomposition 不能解释低 confidence 区间

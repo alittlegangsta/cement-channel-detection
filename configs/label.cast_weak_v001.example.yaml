@@ -23,7 +23,9 @@ baseline:
 
 threshold:
   relative_drop_alpha: 0.35
-  zc_min_limit: TODO_CONFIRM
+  zc_min_limit: 2.5
+  zc_min_limit_status: provisional_candidate_v001_domain_note_retained
+  zc_min_limit_domain_note: accepted for candidate_v001; keep domain confirmation note
   conservative_fallback_mrayl: 2.5
   require_confirmed_zc_min_limit: false
   candidate_coverage_warning_min: 0.001
@@ -41,12 +43,20 @@ recommended_parameter_set:
   alpha: 0.35
   zc_min_limit: 2.5
   severity_thresholds: [0.30, 0.45, 0.60]
-  status: provisional_after_sensitivity
-  requires_human_review: true
+  status: human_reviewed_candidate_v001
+  final_label: false
   no_final_labels: true
   preserve_plus_minus_ablation: true
   mvp4_allowed: false
-  reason: thresholds are provisional and plus/minus disagreement remains non-negligible
+  reason: weak labels are human-reviewed candidates, but not final labels; MVP-4 requires separate approval
+
+relbearing_label_policy:
+  primary: plus
+  primary_status: human_specification_approved
+  data_driven_validation: insufficient_evidence
+  minus_ablation_retained: true
+  minus_usage: audit_only
+  single_sign_final_label_approved: false
 
 azimuth:
   primary_convention: plus

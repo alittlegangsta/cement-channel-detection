@@ -134,18 +134,20 @@ connected component count、isolated speckle ratio、`relative_drop > 0.95`
 outlier fraction 和 invalid/bad `Zc` fraction。该报告用于人工阈值复核，不
 生成 final labels。
 
-人工审查当前接受以下 provisional weak-label 参数组作为后续复核中心点，而不是
-final label 参数：
+MVP-3H 人工审查接受以下参数作为 `candidate_v001` weak-label candidate 参数，
+而不是 final label 参数：
 
 ```yaml
 recommended_parameter_set:
   alpha: 0.35
   zc_min_limit: 2.5
   severity_thresholds: [0.30, 0.45, 0.60]
-  status: provisional_after_sensitivity
-  requires_human_review: true
-  no_final_labels: true
+  status: human_reviewed_candidate_v001
+  final_label: false
 ```
+
+`zc_min_limit = 2.5 MRayl` 接受为 provisional `candidate_v001` 参数，但仍保留
+domain confirmation note。
 
 记录依据：
 
@@ -160,6 +162,18 @@ recommended_parameter_set:
 - bad_data_confidence 只有少量异常；
 - plus/minus disagreement 仍约 0.20，必须保留 plus primary / minus ablation。
 
+RelBearing label policy:
+
+```yaml
+relbearing_label_policy:
+  primary: plus
+  primary_status: human_specification_approved
+  data_driven_validation: insufficient_evidence
+  minus_ablation_retained: true
+  minus_usage: audit_only
+  single_sign_final_label_approved: false
+```
+
 ## Review And Gate
 
 MVP-3 完成后必须输出 candidate audit 和 review figures。MVP-3R review figures
@@ -167,6 +181,5 @@ MVP-3 完成后必须输出 candidate audit 和 review figures。MVP-3R review f
 azimuth axis、标题、confidence 拆解图、bad-data overlay、relative-drop outlier
 overlay、plus/minus disagreement map，以及只在 candidate 区域显示的 severity map。
 
-当前 MVP-3R gate 必须保持 `conditional_go` 且 `mvp4_allowed=false`，原因是
-阈值仍是 provisional，且 plus/minus disagreement 仍不可忽略。只有 gate report
-明确 `go`，且未声称 final labels，才允许进入 MVP-4。
+当前 MVP-3H gate 必须保持 `conditional_go` 且 `mvp4_allowed=false`，原因是 weak
+labels 是 human-reviewed candidates，但不是 final labels；MVP-4 需要单独明确批准。

@@ -19,16 +19,26 @@ class MVP3GateReportError(RuntimeError):
     """Raised when the MVP-3 gate report cannot be generated safely."""
 
 
-PROVISIONAL_RECOMMENDED_PARAMETER_SET = {
+HUMAN_REVIEWED_RECOMMENDED_PARAMETER_SET = {
     "alpha": 0.35,
     "zc_min_limit": 2.5,
     "severity_thresholds": [0.30, 0.45, 0.60],
-    "status": "provisional_after_sensitivity",
-    "requires_human_review": True,
-    "no_final_labels": True,
+    "status": "human_reviewed_candidate_v001",
+    "final_label": False,
     "preserve_plus_minus_ablation": True,
     "mvp4_allowed": False,
-    "reason": "thresholds are provisional and plus/minus disagreement remains non-negligible",
+    "reason": (
+        "weak labels are human-reviewed candidates, but not final labels; "
+        "MVP-4 requires separate approval"
+    ),
+}
+RELBEARING_LABEL_POLICY = {
+    "primary": "plus",
+    "primary_status": "human_specification_approved",
+    "data_driven_validation": "insufficient_evidence",
+    "minus_ablation_retained": True,
+    "minus_usage": "audit_only",
+    "single_sign_final_label_approved": False,
 }
 NON_NEGLIGIBLE_PLUS_MINUS_DISAGREEMENT = 0.20
 
@@ -130,6 +140,7 @@ def _build_gate_report(paths: dict[str, Path]) -> dict[str, Any]:
     for name, status in statuses.items():
         blocking.extend(f"{name}: {message}" for message in status["errors"])
         warnings.extend(f"{name}: {message}" for message in status["warnings"])
+    warnings = _filter_superseded_threshold_warnings(warnings)
 
     weak_report = statuses["weak_label_candidates"]["data"]
     audit_report = statuses["label_audit"]["data"]
@@ -147,7 +158,10 @@ def _build_gate_report(paths: dict[str, Path]) -> dict[str, Any]:
         else None
     )
     if threshold_status == "requires_human_threshold_confirmation":
-        warnings.append("weak_label_candidates: zc_min_limit requires human confirmation.")
+        warnings.append(
+            "weak_label_candidates: zc_min_limit=2.5 MRayl is accepted for "
+            "candidate_v001; domain confirmation note retained."
+        )
 
     coverage = _as_dict(weak_report.get("coverage")) if isinstance(weak_report, dict) else {}
     plus_minus_disagreement = _as_float(coverage.get("plus_minus_disagreement"))
@@ -160,10 +174,10 @@ def _build_gate_report(paths: dict[str, Path]) -> dict[str, Any]:
             f"({plus_minus_disagreement:.6g})."
         )
 
-    recommended_parameter_set = dict(PROVISIONAL_RECOMMENDED_PARAMETER_SET)
+    recommended_parameter_set = dict(HUMAN_REVIEWED_RECOMMENDED_PARAMETER_SET)
     warnings.append(
-        "weak_label_candidates: recommended parameter set is provisional_after_sensitivity "
-        "and requires human review."
+        "weak_label_candidates: human-reviewed candidate labels are not final labels; "
+        "MVP-4 requires separate approval."
     )
 
     no_final_labels = (
@@ -179,7 +193,7 @@ def _build_gate_report(paths: dict[str, Path]) -> dict[str, Any]:
     decision = _decision(blocking, warnings)
     mvp4_allowed = (
         decision == "go"
-        and not recommended_parameter_set["requires_human_review"]
+        and bool(recommended_parameter_set["final_label"])
         and plus_minus_disagreement is not None
         and plus_minus_disagreement < NON_NEGLIGIBLE_PLUS_MINUS_DISAGREEMENT
     )
@@ -190,6 +204,7 @@ def _build_gate_report(paths: dict[str, Path]) -> dict[str, Any]:
         "inputs": {key: str(path) for key, path in paths.items() if not key.startswith("output_")},
         "statuses": {key: _public_status(value) for key, value in statuses.items()},
         "recommended_parameter_set": recommended_parameter_set,
+        "relbearing_label_policy": dict(RELBEARING_LABEL_POLICY),
         "no_final_labels": no_final_labels,
         "plus_primary_minus_ablation_preserved": plus_minus_preserved,
         "plus_minus_disagreement": plus_minus_disagreement,
@@ -285,9 +300,9 @@ def _decision(blocking: list[str], warnings: list[str]) -> str:
 def _conditional_requirements(warnings: list[str]) -> list[str]:
     requirements: list[str] = []
     if any("zc_min_limit" in warning for warning in warnings):
-        requirements.append("Human confirmation required for zc_min_limit.")
-    if any("provisional_after_sensitivity" in warning for warning in warnings):
-        requirements.append("Human review required for provisional weak-label parameters.")
+        requirements.append("Domain confirmation note retained for zc_min_limit.")
+    if any("not final labels" in warning for warning in warnings):
+        requirements.append("Separate approval is required before MVP-4.")
     if any("plus/minus disagreement" in warning for warning in warnings):
         requirements.append("Review plus/minus disagreement before any MVP-4 transition.")
     if warnings:
@@ -322,9 +337,20 @@ def _format_markdown(report: dict[str, Any]) -> str:
         "- severity_thresholds: "
         f"{report['recommended_parameter_set']['severity_thresholds']}",
         f"- status: {report['recommended_parameter_set']['status']}",
-        "- requires_human_review: "
-        f"{report['recommended_parameter_set']['requires_human_review']}",
+        f"- final_label: {report['recommended_parameter_set']['final_label']}",
         f"- reason: {report['recommended_parameter_set']['reason']}",
+        "",
+        "## RelBearing Label Policy",
+        "",
+        f"- primary: {report['relbearing_label_policy']['primary']}",
+        f"- primary_status: {report['relbearing_label_policy']['primary_status']}",
+        "- data_driven_validation: "
+        f"{report['relbearing_label_policy']['data_driven_validation']}",
+        "- minus_ablation_retained: "
+        f"{report['relbearing_label_policy']['minus_ablation_retained']}",
+        f"- minus_usage: {report['relbearing_label_policy']['minus_usage']}",
+        "- single_sign_final_label_approved: "
+        f"{report['relbearing_label_policy']['single_sign_final_label_approved']}",
         "",
         "## Statuses",
         "",
@@ -381,6 +407,14 @@ def _ensure_can_write(path: Path, *, overwrite: bool) -> None:
         raise MVP3GateReportError(
             f"Refusing to overwrite existing file without --overwrite: {path}"
         )
+
+
+def _filter_superseded_threshold_warnings(warnings: list[str]) -> list[str]:
+    return [
+        warning
+        for warning in warnings
+        if "threshold.zc_min_limit is TODO/unconfirmed" not in warning
+    ]
 
 
 def _read_json(path: Path) -> dict[str, Any]:

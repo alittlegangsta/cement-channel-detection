@@ -1093,20 +1093,30 @@ isolated_extreme_outlier_minus_ablation
 `relative_drop > 0.95`。bad-data 单元必须保持 `presence = -1`、`severity = -1`
 或其它 invalid 表达，不得因为极端低 `Zc` 被提升为 severe candidate。
 
-MVP-3R 人工审查后允许记录一个 provisional weak-label 参数组，但该记录不是
-final label approval，也不是进入 MVP-4 的许可：
+MVP-3H 人工审查后允许记录一个 human-reviewed weak-label candidate 参数组，
+但该记录不是 final label approval，也不是进入 MVP-4 的许可：
 
 ```text
 recommended_parameter_set.alpha = 0.35
 recommended_parameter_set.zc_min_limit = 2.5
 recommended_parameter_set.severity_thresholds = [0.30, 0.45, 0.60]
-recommended_parameter_set.status = provisional_after_sensitivity
-recommended_parameter_set.requires_human_review = true
-recommended_parameter_set.no_final_labels = true
+recommended_parameter_set.status = human_reviewed_candidate_v001
+recommended_parameter_set.final_label = false
 recommended_parameter_set.preserve_plus_minus_ablation = true
 recommended_parameter_set.mvp4_allowed = false
 recommended_parameter_set.reason =
-  thresholds are provisional and plus/minus disagreement remains non-negligible
+  weak labels are human-reviewed candidates, but not final labels; MVP-4 requires separate approval
+```
+
+RelBearing label policy must also be preserved:
+
+```text
+relbearing_label_policy.primary = plus
+relbearing_label_policy.primary_status = human_specification_approved
+relbearing_label_policy.data_driven_validation = insufficient_evidence
+relbearing_label_policy.minus_ablation_retained = true
+relbearing_label_policy.minus_usage = audit_only
+relbearing_label_policy.single_sign_final_label_approved = false
 ```
 
 阈值敏感性输出只属于 reports，不属于标签产物：
