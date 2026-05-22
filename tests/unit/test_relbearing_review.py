@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from cement_channel.alignment.relbearing_calibration import calibrate_relbearing_convention
 from cement_channel.visualization.relbearing_review import (
@@ -10,6 +11,8 @@ from cement_channel.visualization.relbearing_review import (
     save_heatmap_png,
     write_relbearing_review_figures,
 )
+
+pytest.importorskip("matplotlib")
 
 
 def _report_and_arrays() -> tuple[object, dict[str, np.ndarray]]:

@@ -17,6 +17,7 @@ from cement_channel.alignment.relbearing_calibration import (  # noqa: E402
     write_candidate_windows_markdown,
 )
 from cement_channel.data.manifest import ManifestBuildError, load_paths_config  # noqa: E402
+from cement_channel.visualization.matplotlib_utils import PlottingDependencyError  # noqa: E402
 from cement_channel.visualization.relbearing_review import (  # noqa: E402
     write_relbearing_review_figures,
 )
@@ -171,6 +172,7 @@ def main() -> int:
         ValueError,
         KeyError,
         FileNotFoundError,
+        PlottingDependencyError,
     ) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

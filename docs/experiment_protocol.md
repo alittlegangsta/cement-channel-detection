@@ -945,6 +945,73 @@ label_confidence 缺失
 标签与 QC 冲突
 ```
 
+MVP-3 当前阶段只允许生成 CAST weak-label candidates，而不是 final labels。
+当 RelBearing 状态仍为 `specification_preferred_plus_data_unresolved` 时，必须采用：
+
+```text
+primary_convention: plus
+ablation_convention: minus
+approved_downstream_mode: plus_primary_minus_ablation
+```
+
+MVP-3 gate 至少检查：
+
+```text
+CAST label input readable
+adaptive baseline valid
+plus / minus candidate metadata preserved
+label_confidence exists
+audit has no blocking errors
+human review figures exist
+no final label is falsely claimed
+```
+
+若 label coverage 极端异常、plus/minus disagreement 极高、baseline 失效或阈值
+需要人工确认，gate 必须为 `conditional_go` 或 `no_go`。
+
+MVP-3R 人工审查后记录的 provisional 参数组为：
+
+```yaml
+recommended_parameter_set:
+  alpha: 0.35
+  zc_min_limit: 2.5
+  severity_thresholds: [0.30, 0.45, 0.60]
+  status: provisional_after_sensitivity
+  requires_human_review: true
+```
+
+该参数组只作为 weak-label candidate review 的中心点。由于 thresholds 仍为
+provisional，且 plus/minus disagreement 仍约 0.20，MVP-3 gate 必须继续保持
+`conditional_go`，并显式写出：
+
+```text
+no_final_labels = true
+plus primary / minus ablation preserved
+mvp4_allowed = false
+reason = thresholds are provisional and plus/minus disagreement remains non-negligible
+```
+
+MVP-3R 若发生以下任一情况，仍不得进入 MVP-4：
+
+```text
+zc_min_limit 仍使用 TODO_CONFIRM / conservative fallback
+alpha 或 severity thresholds 未经人工确认
+threshold sensitivity 未完成或显示 coverage 对参数高度不稳定
+bad-data mask 显示大面积 non-finite、Zc <= 0 或 relative_drop > 0.95
+confidence decomposition 不能解释低 confidence 区间
+review figures 未生成或缺少 bad-data / outlier / confidence 分解图
+```
+
+MVP-3R threshold sensitivity 报告必须保存到 reports 目录：
+
+```text
+label_threshold_sensitivity_v001.md
+label_threshold_sensitivity_v001.json
+label_threshold_sensitivity_v001.csv
+```
+
+该报告只支持人工阈值复核和 gate 判断，不得被解释为 final labels 或 MVP-4 许可。
+
 ---
 
 ## 9. 相关性验证协议

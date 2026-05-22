@@ -1,0 +1,96 @@
+schema_version: schema_v001
+label_version: cast_weak_v001
+stage: MVP-3
+status: candidate_generation_only
+
+source:
+  name: CAST.Zc
+  role: weak_label_teacher
+  zc_unit: MRayl
+  no_xsi_waveform: true
+  no_feature_extraction: true
+  no_model_training: true
+
+baseline:
+  method: rolling_quantile
+  allowed_methods: [rolling_quantile, rolling_median]
+  window_m: 75.0
+  window_m_min: 50.0
+  window_m_max: 100.0
+  quantile: 0.90
+  smooth_axis: depth_only
+  min_finite_fraction: 0.70
+
+threshold:
+  relative_drop_alpha: 0.35
+  zc_min_limit: TODO_CONFIRM
+  conservative_fallback_mrayl: 2.5
+  require_confirmed_zc_min_limit: false
+  candidate_coverage_warning_min: 0.001
+  candidate_coverage_warning_max: 0.40
+  candidate_coverage_blocking_min: 0.000001
+  candidate_coverage_blocking_max: 0.80
+
+severity:
+  method: relative_drop_bins
+  mild_min_drop: 0.30
+  moderate_min_drop: 0.45
+  severe_min_drop: 0.60
+
+recommended_parameter_set:
+  alpha: 0.35
+  zc_min_limit: 2.5
+  severity_thresholds: [0.30, 0.45, 0.60]
+  status: provisional_after_sensitivity
+  requires_human_review: true
+  no_final_labels: true
+  preserve_plus_minus_ablation: true
+  mvp4_allowed: false
+  reason: thresholds are provisional and plus/minus disagreement remains non-negligible
+
+azimuth:
+  primary_convention: plus
+  ablation_convention: minus
+  side_a_offset_deg: 0.0
+  side_a_offset_status: manually_confirmed
+  cast_azimuth_direction: normal
+  cast_azimuth_direction_status: manually_confirmed
+  cast_azimuth_count: 180
+  cast_azimuth_step_deg: 2.0
+  convention_status: specification_preferred_plus_data_unresolved
+  approved_downstream_mode: plus_primary_minus_ablation
+
+confidence:
+  use_orientation_confidence: true
+  low_inc_downweight: true
+  environment_outlier_downweight: true
+  baseline_invalid_confidence: 0.0
+  bad_data_confidence: 0.0
+  isolated_extreme_outlier_confidence: 0.10
+  non_candidate_confidence_scale: 0.25
+  relative_drop_full_confidence: 0.70
+  orientation_floor: 0.05
+  outlier_zc_min: 0.0
+  outlier_zc_max: 20.0
+  outlier_downweight: 0.50
+
+bad_data:
+  nonfinite_zc_invalid: true
+  nonpositive_zc_invalid: true
+  extreme_relative_drop_threshold: 0.95
+  isolated_extreme_max_pixels: 3
+  do_not_promote_bad_data_to_severe: true
+
+audit:
+  isolated_object_max_pixels: 3
+  min_object_depth_m: 0.5
+  max_plus_minus_disagreement_warning: 0.25
+  max_plus_minus_disagreement_blocking: 0.50
+  low_confidence_threshold: 0.25
+
+outputs:
+  save_plus_candidate: true
+  save_minus_ablation: true
+  no_final_labels: true
+  label_source_plus: cast_weak_plus
+  label_source_minus: cast_weak_minus_ablation

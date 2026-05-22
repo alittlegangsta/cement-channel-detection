@@ -1033,6 +1033,96 @@ depth 单位一致。若排除区间使用 `ft` 而内部 depth 轴为 `m` 或 `
 
 ---
 
+### 7.7.1 MVP-3 CAST weak-label candidate schema
+
+MVP-3 只生成 CAST weak-label candidates，不生成 final labels。当前候选版本为：
+
+```text
+label_version = cast_weak_v001
+```
+
+必须同时保存 plus primary 与 minus ablation 两套候选：
+
+```text
+label_source_plus = cast_weak_plus
+label_source_minus = cast_weak_minus_ablation
+convention_status = specification_preferred_plus_data_unresolved
+no_final_labels = true
+```
+
+候选数组推荐以 NPZ 保存，shape 为 `[depth, cast_azimuth]`，并至少包含：
+
+```text
+presence_plus
+severity_plus
+label_confidence_plus
+presence_minus_ablation
+severity_minus_ablation
+label_confidence_minus_ablation
+evidence_flags_plus
+evidence_flags_minus_ablation
+cast_azimuth_aligned_deg
+metadata_json
+```
+
+MVP-3R 诊断版候选必须额外保存 confidence 分量和 bad-data mask，便于解释低
+confidence 区间和白线/异常线：
+
+```text
+zc_strength_confidence_plus
+baseline_confidence_plus
+orientation_confidence_on_cast_depth_plus
+relbearing_valid_confidence_plus
+bad_data_confidence_plus
+final_label_confidence_plus
+bad_data_mask_plus
+relative_drop_outlier_plus
+isolated_extreme_outlier_plus
+zc_strength_confidence_minus_ablation
+baseline_confidence_minus_ablation
+orientation_confidence_on_cast_depth_minus_ablation
+relbearing_valid_confidence_minus_ablation
+bad_data_confidence_minus_ablation
+final_label_confidence_minus_ablation
+bad_data_mask_minus_ablation
+relative_drop_outlier_minus_ablation
+isolated_extreme_outlier_minus_ablation
+```
+
+`bad_data_mask_*` 至少包含 non-finite `Zc`、`Zc <= 0` 和
+`relative_drop > 0.95`。bad-data 单元必须保持 `presence = -1`、`severity = -1`
+或其它 invalid 表达，不得因为极端低 `Zc` 被提升为 severe candidate。
+
+MVP-3R 人工审查后允许记录一个 provisional weak-label 参数组，但该记录不是
+final label approval，也不是进入 MVP-4 的许可：
+
+```text
+recommended_parameter_set.alpha = 0.35
+recommended_parameter_set.zc_min_limit = 2.5
+recommended_parameter_set.severity_thresholds = [0.30, 0.45, 0.60]
+recommended_parameter_set.status = provisional_after_sensitivity
+recommended_parameter_set.requires_human_review = true
+recommended_parameter_set.no_final_labels = true
+recommended_parameter_set.preserve_plus_minus_ablation = true
+recommended_parameter_set.mvp4_allowed = false
+recommended_parameter_set.reason =
+  thresholds are provisional and plus/minus disagreement remains non-negligible
+```
+
+阈值敏感性输出只属于 reports，不属于标签产物：
+
+```text
+label_threshold_sensitivity_v001.md
+label_threshold_sensitivity_v001.json
+label_threshold_sensitivity_v001.csv
+```
+
+MVP-3 候选规则不得只依赖固定阈值，必须包含自适应 `Zc_base` 和
+`relative_drop`。若 `zc_min_limit` 未经人工确认，报告必须标记为
+`requires_human_threshold_confirmation`。
+
+---
+
 ### 7.8 `/objects`
 
 对象级标签用于描述空间连通窜槽对象。

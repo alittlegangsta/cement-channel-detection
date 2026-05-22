@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import struct
-import zlib
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -14,6 +12,13 @@ from cement_channel.alignment.relbearing_calibration import (
     cast_azimuth_deg,
     xsi_side_azimuth_deg,
 )
+from cement_channel.visualization.matplotlib_utils import (
+    add_uncertain_row_spans,
+    finite_percentile_limits,
+    image_extent,
+    require_pyplot,
+    save_figure,
+)
 
 
 def save_heatmap_png(
@@ -23,44 +28,46 @@ def save_heatmap_png(
     uncertain_rows: np.ndarray | None = None,
     overwrite: bool = False,
     upscale: int = 10,
+    depth_axis: np.ndarray | None = None,
+    azimuth_axis: np.ndarray | None = None,
+    title: str = "Review Heatmap",
+    colorbar_label: str = "value",
+    xlabel: str = "Azimuth / side",
+    ylabel: str = "Depth",
+    cmap: str = "coolwarm",
 ) -> None:
+    del upscale
     if output_path.exists() and not overwrite:
         raise FileExistsError(f"Output already exists: {output_path}. Pass overwrite=True.")
-    rgb = heatmap_rgb(values, uncertain_rows=uncertain_rows)
-    scale = max(1, int(upscale))
-    if scale > 1:
-        rgb = np.repeat(np.repeat(rgb, scale, axis=0), scale, axis=1)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    write_png_rgb(output_path, rgb)
+    image = np.asarray(values, dtype=np.float32)
+    if image.ndim != 2:
+        raise ValueError("values must have shape [row, column].")
+    depth = _axis_or_default(depth_axis, image.shape[0], default_scale=1.0)
+    azimuth = _axis_or_default(azimuth_axis, image.shape[1], default_scale=1.0)
+    _save_heatmap_figure(
+        image,
+        output_path,
+        depth_axis=depth,
+        x_axis=azimuth,
+        uncertain_rows=uncertain_rows,
+        title=title,
+        colorbar_label=colorbar_label,
+        xlabel=xlabel,
+        ylabel=ylabel,
+        cmap=cmap,
+        overwrite=overwrite,
+    )
 
 
 def heatmap_rgb(values: np.ndarray, *, uncertain_rows: np.ndarray | None = None) -> np.ndarray:
+    del uncertain_rows
     array = np.asarray(values, dtype=np.float32)
     if array.ndim != 2:
         raise ValueError("values must have shape [row, column].")
-    if array.size == 0:
-        array = np.zeros((1, 1), dtype=np.float32)
-    finite = array[np.isfinite(array)]
-    if finite.size:
-        vmin = float(np.nanpercentile(finite, 2.0))
-        vmax = float(np.nanpercentile(finite, 98.0))
-    else:
-        vmin, vmax = 0.0, 1.0
-    if vmax <= vmin:
-        vmax = vmin + 1.0
+    vmin, vmax = finite_percentile_limits(array, 2.0, 98.0)
     norm = np.clip((array - vmin) / (vmax - vmin), 0.0, 1.0)
     norm = np.where(np.isfinite(norm), norm, 0.0)
-    rgb = _blue_white_red(norm)
-    if uncertain_rows is not None:
-        mask = np.asarray(uncertain_rows, dtype=bool).reshape(-1)
-        for row_index, uncertain in enumerate(mask[: rgb.shape[0]]):
-            if uncertain:
-                rgb[row_index, :, :] = (0.55 * rgb[row_index, :, :] + 0.45 * 180).astype(np.uint8)
-                rgb[row_index, : max(1, rgb.shape[1] // 32), :] = np.array(
-                    [220, 40, 40],
-                    dtype=np.uint8,
-                )
-    return rgb
+    return _blue_white_red(norm)
 
 
 def write_relbearing_review_figures(
@@ -83,6 +90,7 @@ def write_relbearing_review_figures(
     for index, window in enumerate(windows):
         window_label = f"{index:02d}_{window.window_id}"
         window_slice = slice(int(window.start_index), int(window.stop_index))
+        depth = np.asarray(arrays["depth"][window_slice], dtype=np.float32)
         uncertain = arrays["orientation_confidence"][window_slice] < 0.5
         cast_raw = arrays["cast_zc"][window_slice]
         xsi_energy = arrays["xsi_side_energy"][window_slice]
@@ -90,7 +98,18 @@ def write_relbearing_review_figures(
         cast_axis = arrays["cast_azimuth_axis_deg"]
 
         path = output_dir / f"cast_zc_raw_window_{window_label}.png"
-        save_heatmap_png(cast_raw, path, uncertain_rows=uncertain, overwrite=overwrite)
+        save_heatmap_png(
+            cast_raw,
+            path,
+            uncertain_rows=uncertain,
+            overwrite=overwrite,
+            depth_axis=depth,
+            azimuth_axis=cast_axis,
+            title=f"CAST Zc Raw | {window.window_id}",
+            colorbar_label="Zc (MRayl)",
+            xlabel="CAST azimuth (deg)",
+            cmap="viridis",
+        )
         figures[f"cast_zc_raw_window_{window_label}"] = str(path)
 
         plus_cast = aligned_cast_heatmap(cast_raw, cast_axis, rel, sign="plus", direction="normal")
@@ -102,7 +121,18 @@ def write_relbearing_review_figures(
             direction="normal",
         )
         path = output_dir / f"cast_zc_plus_minus_window_{window_label}.png"
-        save_heatmap_png(_stack_blocks([plus_cast, minus_cast]), path, overwrite=overwrite)
+        _save_panel_heatmaps(
+            [
+                ("+RelBearing", plus_cast, depth, cast_axis),
+                ("-RelBearing", minus_cast, depth, cast_axis),
+            ],
+            path,
+            title=f"CAST Zc High-Side Rotation Comparison | {window.window_id}",
+            colorbar_label="Zc (MRayl)",
+            uncertain_rows=uncertain,
+            overwrite=overwrite,
+            cmap="viridis",
+        )
         figures[f"cast_zc_plus_minus_window_{window_label}"] = str(path)
 
         normal_cast = aligned_cast_heatmap(
@@ -120,16 +150,33 @@ def write_relbearing_review_figures(
             direction="reversed",
         )
         path = output_dir / f"cast_zc_normal_reversed_compare_window_{window_label}.png"
-        save_heatmap_png(_stack_blocks([normal_cast, reversed_cast]), path, overwrite=overwrite)
+        _save_panel_heatmaps(
+            [
+                ("CAST normal", normal_cast, depth, cast_axis),
+                ("CAST reversed", reversed_cast, depth, cast_axis),
+            ],
+            path,
+            title=f"CAST Azimuth Matrix Direction Comparison | {window.window_id}",
+            colorbar_label="Zc (MRayl)",
+            uncertain_rows=uncertain,
+            overwrite=overwrite,
+            cmap="viridis",
+        )
         figures[f"cast_zc_normal_reversed_compare_window_{window_label}"] = str(path)
 
+        side_axis = np.arange(1, xsi_energy.shape[1] + 1, dtype=np.float32)
         path = output_dir / f"xsi_side_energy_raw_window_{window_label}.png"
         save_heatmap_png(
             xsi_energy,
             path,
             uncertain_rows=uncertain,
             overwrite=overwrite,
-            upscale=20,
+            depth_axis=depth,
+            azimuth_axis=side_axis,
+            title=f"XSI Side Energy Raw | {window.window_id}",
+            colorbar_label="side energy",
+            xlabel="XSI side index",
+            cmap="magma",
         )
         figures[f"xsi_side_energy_raw_window_{window_label}"] = str(path)
 
@@ -161,12 +208,26 @@ def write_relbearing_review_figures(
             side_order="counterclockwise",
             side_a_offset_deg=side_offset,
         )
+        aligned_side_axis = xsi_side_azimuth_deg(
+            xsi_energy.shape[1],
+            side_order=side_order,  # type: ignore[arg-type]
+            side_a_offset_deg=side_offset,
+        )
         path = output_dir / f"xsi_side_energy_plus_minus_window_{window_label}.png"
-        save_heatmap_png(
-            _stack_blocks([plus_xsi, minus_xsi, cw_xsi, ccw_xsi]),
+        _save_panel_heatmaps(
+            [
+                ("+RelBearing", plus_xsi, depth, aligned_side_axis),
+                ("-RelBearing", minus_xsi, depth, aligned_side_axis),
+                ("clockwise +RelBearing", cw_xsi, depth, aligned_side_axis),
+                ("counterclockwise +RelBearing", ccw_xsi, depth, aligned_side_axis),
+            ],
             path,
+            title=f"XSI Side Energy Rotation/Order Comparison | {window.window_id}",
+            colorbar_label="side energy",
+            uncertain_rows=uncertain,
             overwrite=overwrite,
-            upscale=20,
+            cmap="magma",
+            xlabel="Aligned side azimuth (deg)",
         )
         figures[f"xsi_side_energy_plus_minus_window_{window_label}"] = str(path)
 
@@ -236,19 +297,40 @@ def save_hypothesis_score_summary_png(
         key=lambda item: item.total_score,
         reverse=True,
     )[:12]
-    width = 320
-    height = max(80, 24 + 14 * len(scores))
-    rgb = np.full((height, width, 3), 245, dtype=np.uint8)
-    max_score = max((score.total_score for score in scores), default=1.0) or 1.0
-    for row, score in enumerate(scores):
-        y0 = 12 + row * 14
-        bar_width = int((score.total_score / max_score) * (width - 40))
-        color = np.array([45, 120, 210], dtype=np.uint8)
-        if score.hypothesis.relbearing_sign == "minus":
-            color = np.array([220, 120, 45], dtype=np.uint8)
-        rgb[y0 : y0 + 8, 20 : 20 + max(1, bar_width), :] = color
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    write_png_rgb(output_path, rgb)
+    plt = require_pyplot()
+    colors = [
+        "tab:blue" if score.hypothesis.relbearing_sign == "plus" else "tab:orange"
+        for score in scores
+    ]
+    labels = [
+        (
+            f"{score.hypothesis.relbearing_sign} | {score.hypothesis.cast_azimuth_direction} | "
+            f"{score.hypothesis.xsi_side_order}"
+        )
+        for score in scores
+    ]
+    values = [score.total_score for score in scores]
+    fig, ax = plt.subplots(
+        figsize=(10, max(4, 0.45 * max(len(scores), 1))),
+        constrained_layout=True,
+    )
+    y = np.arange(len(scores))
+    ax.barh(y, values, color=colors)
+    ax.set_yticks(y, labels=labels)
+    ax.invert_yaxis()
+    ax.set_xlabel("Hypothesis total score")
+    ax.set_title("RelBearing Hypothesis Score Summary")
+    ax.grid(True, axis="x", alpha=0.25)
+    from matplotlib.patches import Patch
+
+    ax.legend(
+        handles=[
+            Patch(facecolor="tab:blue", label="+RelBearing"),
+            Patch(facecolor="tab:orange", label="-RelBearing"),
+        ],
+        loc="lower right",
+    )
+    save_figure(fig, output_path, overwrite=overwrite)
 
 
 def write_review_summary_template(
@@ -292,30 +374,101 @@ def write_review_summary_template(
     output_path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def write_png_rgb(path: Path, rgb: np.ndarray) -> None:
-    image = np.asarray(rgb, dtype=np.uint8)
-    if image.ndim != 3 or image.shape[2] != 3:
-        raise ValueError("rgb must have shape [height, width, 3].")
-    height, width, _ = image.shape
-    raw = b"".join(b"\x00" + image[row].tobytes() for row in range(height))
-    png = b"".join(
-        [
-            b"\x89PNG\r\n\x1a\n",
-            _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)),
-            _png_chunk(b"IDAT", zlib.compress(raw)),
-            _png_chunk(b"IEND", b""),
-        ]
+def _save_heatmap_figure(
+    image: np.ndarray,
+    output_path: Path,
+    *,
+    depth_axis: np.ndarray,
+    x_axis: np.ndarray,
+    uncertain_rows: np.ndarray | None,
+    title: str,
+    colorbar_label: str,
+    xlabel: str,
+    ylabel: str,
+    cmap: str,
+    overwrite: bool,
+) -> None:
+    plt = require_pyplot()
+    vmin, vmax = finite_percentile_limits(image, 2.0, 98.0)
+    fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
+    im = ax.imshow(
+        image,
+        aspect="auto",
+        origin="upper",
+        extent=image_extent(x_axis=x_axis, y_axis=depth_axis),
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
     )
-    path.write_bytes(png)
+    add_uncertain_row_spans(ax, y_axis=depth_axis, uncertain_rows=uncertain_rows)
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    fig.colorbar(im, ax=ax, label=colorbar_label)
+    if uncertain_rows is not None and np.any(uncertain_rows):
+        from matplotlib.patches import Patch
+
+        ax.legend(
+            handles=[Patch(facecolor="tab:red", alpha=0.25, label="orientation uncertain")],
+            loc="upper right",
+        )
+    save_figure(fig, output_path, overwrite=overwrite)
 
 
-def _png_chunk(chunk_type: bytes, payload: bytes) -> bytes:
-    return (
-        struct.pack(">I", len(payload))
-        + chunk_type
-        + payload
-        + struct.pack(">I", zlib.crc32(chunk_type + payload) & 0xFFFFFFFF)
+def _save_panel_heatmaps(
+    panels: list[tuple[str, np.ndarray, np.ndarray, np.ndarray]],
+    output_path: Path,
+    *,
+    title: str,
+    colorbar_label: str,
+    uncertain_rows: np.ndarray | None,
+    overwrite: bool,
+    cmap: str,
+    xlabel: str = "High-side aligned azimuth (deg)",
+) -> None:
+    if output_path.exists() and not overwrite:
+        raise FileExistsError(f"Output already exists: {output_path}. Pass overwrite=True.")
+    plt = require_pyplot()
+    values = np.concatenate(
+        [np.asarray(panel[1], dtype=np.float32).reshape(-1) for panel in panels]
     )
+    vmin, vmax = finite_percentile_limits(values, 2.0, 98.0)
+    fig, axes = plt.subplots(
+        len(panels),
+        1,
+        figsize=(10, max(4, 3.0 * len(panels))),
+        sharex=False,
+        constrained_layout=True,
+    )
+    axes_array = np.asarray(axes).reshape(-1)
+    last_image = None
+    for ax, (panel_title, image, depth_axis, x_axis) in zip(axes_array, panels, strict=False):
+        last_image = ax.imshow(
+            image,
+            aspect="auto",
+            origin="upper",
+            extent=image_extent(x_axis=x_axis, y_axis=depth_axis),
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+        )
+        add_uncertain_row_spans(ax, y_axis=depth_axis, uncertain_rows=uncertain_rows)
+        ax.set_title(panel_title)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel("Depth")
+    fig.suptitle(title)
+    if last_image is not None:
+        fig.colorbar(last_image, ax=axes_array.tolist(), label=colorbar_label)
+    save_figure(fig, output_path, overwrite=overwrite)
+
+
+def _axis_or_default(axis: np.ndarray | None, count: int, *, default_scale: float) -> np.ndarray:
+    if axis is None:
+        return np.arange(count, dtype=np.float32) * default_scale
+    values = np.asarray(axis, dtype=np.float32).reshape(-1)
+    if values.size != count:
+        return np.arange(count, dtype=np.float32) * default_scale
+    return values
 
 
 def _blue_white_red(norm: np.ndarray) -> np.ndarray:
