@@ -115,15 +115,19 @@ def test_mvp3_gate_report_conditional_go_for_threshold_confirmation(tmp_path: Pa
     report = json.loads(paths["output_json"].read_text(encoding="utf-8"))
     assert report["decision"] == "conditional_go"
     assert report["mvp4_allowed"] is False
-    assert report["recommended_parameter_set"]["status"] == "provisional_after_sensitivity"
+    assert report["recommended_parameter_set"]["status"] == "human_reviewed_candidate_v001"
     assert report["recommended_parameter_set"]["alpha"] == 0.35
     assert report["recommended_parameter_set"]["zc_min_limit"] == 2.5
     assert report["recommended_parameter_set"]["severity_thresholds"] == [0.30, 0.45, 0.60]
-    assert report["recommended_parameter_set"]["requires_human_review"] is True
+    assert report["recommended_parameter_set"]["final_label"] is False
+    assert report["relbearing_label_policy"]["primary"] == "plus"
+    assert report["relbearing_label_policy"]["primary_status"] == "human_specification_approved"
+    assert report["relbearing_label_policy"]["minus_usage"] == "audit_only"
+    assert report["relbearing_label_policy"]["single_sign_final_label_approved"] is False
     assert report["no_final_labels"] is True
     assert report["plus_primary_minus_ablation_preserved"] is True
-    assert "thresholds are provisional" in report["mvp4_allowed_reason"]
-    assert any("zc_min_limit" in item for item in report["warnings"])
+    assert "MVP-4 requires separate approval" in report["mvp4_allowed_reason"]
+    assert any("domain confirmation note" in item for item in report["warnings"])
     assert paths["output_md"].exists()
 
 
