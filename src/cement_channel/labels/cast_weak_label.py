@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from scipy.ndimage import label as connected_label
 
 from cement_channel.labels.cast_label_input import load_label_config, summarize_array
 from cement_channel.labels.schema import (
@@ -36,6 +37,8 @@ class CastWeakLabelReport:
     severity_thresholds: dict[str, float]
     coverage: dict[str, float | None]
     confidence: dict[str, dict[str, Any]]
+    confidence_components: dict[str, dict[str, dict[str, Any]]]
+    bad_data: dict[str, Any]
     arrays: dict[str, dict[str, Any]]
     warnings: list[str]
     errors: list[str]
@@ -81,6 +84,10 @@ def generate_cast_weak_labels(
     relative_drop = np.asarray(baseline_arrays["relative_drop"], dtype=np.float32)
     zc_ratio = np.asarray(baseline_arrays["zc_ratio"], dtype=np.float32)
     baseline_valid = np.asarray(baseline_arrays["baseline_valid"], dtype=bool)
+    baseline_finite_fraction = np.asarray(
+        baseline_arrays.get("finite_fraction", baseline_valid.astype(np.float32)),
+        dtype=np.float32,
+    )
 
     warnings: list[str] = []
     errors: list[str] = []
@@ -89,11 +96,18 @@ def generate_cast_weak_labels(
     zc_min_limit = threshold["zc_min_limit_effective"]
     severity_thresholds = _severity_thresholds(label_config)
     confidence_config = _as_dict(label_config.get("confidence"))
+    bad_data_masks = _bad_data_masks(cast_zc, relative_drop, label_config)
 
     finite_zc = np.isfinite(cast_zc)
-    valid = finite_zc & baseline_valid & np.isfinite(relative_drop) & np.isfinite(zc_base)
+    valid = (
+        finite_zc
+        & baseline_valid
+        & np.isfinite(relative_drop)
+        & np.isfinite(zc_base)
+        & ~bad_data_masks["bad_data_mask"]
+    )
     relative_rule = valid & (cast_zc < (zc_base * (1.0 - alpha)))
-    absolute_rule = finite_zc & (cast_zc < zc_min_limit)
+    absolute_rule = valid & (cast_zc < zc_min_limit)
     candidate = valid & (relative_rule | absolute_rule)
 
     presence = np.full(cast_zc.shape, PresenceLabel.UNKNOWN, dtype=np.int8)
@@ -101,16 +115,22 @@ def generate_cast_weak_labels(
     presence[candidate] = PresenceLabel.CHANNEL_CANDIDATE
     severity = _severity_from_relative_drop(relative_drop, valid, candidate, severity_thresholds)
     evidence_flags = _evidence_flags(relative_rule, absolute_rule, valid)
-    confidence = _label_confidence(
+    confidence_components = _label_confidence_components(
         cast_zc=cast_zc,
         relative_drop=relative_drop,
         candidate=candidate,
         valid=valid,
+        baseline_valid=baseline_valid,
+        baseline_finite_fraction=baseline_finite_fraction,
+        relbearing_deg=relbearing,
         orientation_confidence=orientation_confidence,
         orientation_uncertain=orientation_uncertain,
+        bad_data_mask=bad_data_masks["bad_data_mask"],
+        isolated_extreme_outlier_mask=bad_data_masks["isolated_extreme_outlier_mask"],
         config=confidence_config,
         alpha=alpha,
     )
+    confidence = confidence_components["final_label_confidence"]
 
     plus = _rotate_candidate_set(
         presence=presence,
@@ -119,6 +139,8 @@ def generate_cast_weak_labels(
         evidence_flags=evidence_flags,
         relative_drop=relative_drop,
         zc_ratio=zc_ratio,
+        bad_data_masks=bad_data_masks,
+        confidence_components=confidence_components,
         relbearing_deg=relbearing,
         cast_azimuth_deg=cast_azimuth,
         convention="plus",
@@ -130,6 +152,8 @@ def generate_cast_weak_labels(
         evidence_flags=evidence_flags,
         relative_drop=relative_drop,
         zc_ratio=zc_ratio,
+        bad_data_masks=bad_data_masks,
+        confidence_components=confidence_components,
         relbearing_deg=relbearing,
         cast_azimuth_deg=cast_azimuth,
         convention="minus",
@@ -191,6 +215,11 @@ def generate_cast_weak_labels(
         "plus": metadata_plus.to_dict(),
         "minus_ablation": metadata_minus.to_dict(),
         "threshold": threshold,
+        "bad_data": _bad_data_summary(bad_data_masks),
+        "confidence_components": {
+            "plus": _component_summaries(plus),
+            "minus_ablation": _component_summaries(minus),
+        },
         "no_final_labels": True,
     }
     arrays = {
@@ -202,12 +231,32 @@ def generate_cast_weak_labels(
         "evidence_flags_plus": plus["evidence_flags"],
         "relative_drop_plus": plus["relative_drop"],
         "zc_ratio_plus": plus["zc_ratio"],
+        "bad_data_mask_plus": plus["bad_data_mask"],
+        "relative_drop_outlier_plus": plus["relative_drop_outlier_mask"],
+        "isolated_extreme_outlier_plus": plus["isolated_extreme_outlier_mask"],
+        "zc_strength_confidence_plus": plus["zc_strength_confidence"],
+        "baseline_confidence_plus": plus["baseline_confidence"],
+        "orientation_confidence_on_cast_depth_plus": plus["orientation_confidence_on_cast_depth"],
+        "relbearing_valid_confidence_plus": plus["relbearing_valid_confidence"],
+        "bad_data_confidence_plus": plus["bad_data_confidence"],
+        "final_label_confidence_plus": plus["confidence"],
         "presence_minus_ablation": minus["presence"],
         "severity_minus_ablation": minus["severity"],
         "label_confidence_minus_ablation": minus["confidence"],
         "evidence_flags_minus_ablation": minus["evidence_flags"],
         "relative_drop_minus_ablation": minus["relative_drop"],
         "zc_ratio_minus_ablation": minus["zc_ratio"],
+        "bad_data_mask_minus_ablation": minus["bad_data_mask"],
+        "relative_drop_outlier_minus_ablation": minus["relative_drop_outlier_mask"],
+        "isolated_extreme_outlier_minus_ablation": minus["isolated_extreme_outlier_mask"],
+        "zc_strength_confidence_minus_ablation": minus["zc_strength_confidence"],
+        "baseline_confidence_minus_ablation": minus["baseline_confidence"],
+        "orientation_confidence_on_cast_depth_minus_ablation": minus[
+            "orientation_confidence_on_cast_depth"
+        ],
+        "relbearing_valid_confidence_minus_ablation": minus["relbearing_valid_confidence"],
+        "bad_data_confidence_minus_ablation": minus["bad_data_confidence"],
+        "final_label_confidence_minus_ablation": minus["confidence"],
         "no_final_labels": np.asarray(True),
         "metadata_json": np.asarray(json.dumps(metadata, ensure_ascii=False)),
     }
@@ -236,6 +285,11 @@ def generate_cast_weak_labels(
                 minus["confidence"],
             ).to_dict(),
         },
+        confidence_components={
+            "plus": _component_summaries(plus),
+            "minus_ablation": _component_summaries(minus),
+        },
+        bad_data=_bad_data_summary(bad_data_masks),
         arrays={key: summarize_array(key, value).to_dict() for key, value in arrays.items()},
         warnings=warnings,
         errors=errors,
@@ -294,6 +348,17 @@ def format_cast_weak_label_markdown(report: CastWeakLabelReport) -> str:
     ]
     for key, value in data["coverage"].items():
         lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Bad Data", ""])
+    for key, value in data["bad_data"].items():
+        if isinstance(value, dict) and "fraction" in value:
+            lines.append(f"- {key}: fraction={value['fraction']}, count={value['count']}")
+    lines.extend(["", "## Confidence Components", ""])
+    for convention, components in data["confidence_components"].items():
+        lines.append(f"### {convention}")
+        for key, summary in components.items():
+            lines.append(
+                f"- {key}: min={summary['min']}, max={summary['max']}, mean={summary['mean']}"
+            )
     lines.extend(["", "## Warnings", ""])
     lines.extend(_message_lines(data["warnings"]))
     lines.extend(["", "## Errors", ""])
@@ -358,13 +423,11 @@ def _severity_from_relative_drop(
     severity = np.full(relative_drop.shape, SeverityLabel.UNKNOWN, dtype=np.int8)
     severity[valid] = SeverityLabel.NONE
     severity[candidate] = SeverityLabel.MILD
-    severity[valid & (relative_drop >= thresholds["moderate_min_drop"])] = (
+    severity[candidate & (relative_drop >= thresholds["moderate_min_drop"])] = (
         SeverityLabel.MODERATE
     )
-    severity[valid & (relative_drop >= thresholds["severe_min_drop"])] = SeverityLabel.SEVERE
-    severity[valid & candidate & (relative_drop < thresholds["mild_min_drop"])] = (
-        SeverityLabel.MILD
-    )
+    severity[candidate & (relative_drop >= thresholds["severe_min_drop"])] = SeverityLabel.SEVERE
+    severity[valid & candidate & (relative_drop < thresholds["mild_min_drop"])] = SeverityLabel.MILD
     return severity
 
 
@@ -381,22 +444,66 @@ def _evidence_flags(
     return flags
 
 
-def _label_confidence(
+def _bad_data_masks(
+    cast_zc: np.ndarray,
+    relative_drop: np.ndarray,
+    label_config: dict[str, Any],
+) -> dict[str, np.ndarray]:
+    config = _as_dict(label_config.get("bad_data"))
+    nonfinite_zc = ~np.isfinite(cast_zc)
+    nonpositive_zc = np.isfinite(cast_zc) & (cast_zc <= 0.0)
+    threshold = float(config.get("extreme_relative_drop_threshold", 0.95))
+    relative_drop_outlier = np.isfinite(relative_drop) & (relative_drop > threshold)
+    isolated_extreme = _isolated_mask(
+        relative_drop_outlier,
+        max_pixels=int(config.get("isolated_extreme_max_pixels", 3)),
+    )
+    bad_data = nonfinite_zc | nonpositive_zc | relative_drop_outlier
+    return {
+        "nonfinite_zc_mask": nonfinite_zc.astype(bool),
+        "nonpositive_zc_mask": nonpositive_zc.astype(bool),
+        "relative_drop_outlier_mask": relative_drop_outlier.astype(bool),
+        "isolated_extreme_outlier_mask": isolated_extreme.astype(bool),
+        "bad_data_mask": bad_data.astype(bool),
+    }
+
+
+def _isolated_mask(mask: np.ndarray, *, max_pixels: int) -> np.ndarray:
+    candidate = np.asarray(mask, dtype=bool)
+    if max_pixels <= 0 or not np.any(candidate):
+        return np.zeros(candidate.shape, dtype=bool)
+    labels, count = connected_label(candidate, structure=np.ones((3, 3), dtype=bool))
+    isolated = np.zeros(candidate.shape, dtype=bool)
+    for label_id in range(1, count + 1):
+        component = labels == label_id
+        if int(np.count_nonzero(component)) <= max_pixels:
+            isolated |= component
+    return isolated
+
+
+def _label_confidence_components(
     *,
     cast_zc: np.ndarray,
     relative_drop: np.ndarray,
     candidate: np.ndarray,
     valid: np.ndarray,
+    baseline_valid: np.ndarray,
+    baseline_finite_fraction: np.ndarray,
+    relbearing_deg: np.ndarray,
     orientation_confidence: np.ndarray,
     orientation_uncertain: np.ndarray,
+    bad_data_mask: np.ndarray,
+    isolated_extreme_outlier_mask: np.ndarray,
     config: dict[str, Any],
     alpha: float,
-) -> np.ndarray:
+) -> dict[str, np.ndarray]:
     full_drop = float(config.get("relative_drop_full_confidence", 0.70))
     non_candidate_scale = float(config.get("non_candidate_confidence_scale", 0.25))
     orientation_floor = float(config.get("orientation_floor", 0.05))
     strength = np.clip(relative_drop / max(full_drop, alpha), 0.0, 1.0)
     strength = np.where(candidate, np.maximum(strength, 0.25), strength * non_candidate_scale)
+    strength = np.where(np.isfinite(strength), strength, 0.0).astype(np.float32)
+    baseline_confidence = _baseline_confidence(baseline_valid, baseline_finite_fraction)
     orientation_weight = np.clip(orientation_confidence.reshape(-1, 1), 0.0, 1.0)
     if bool(config.get("low_inc_downweight", True)):
         orientation_weight = np.where(
@@ -404,19 +511,69 @@ def _label_confidence(
             np.minimum(orientation_weight, orientation_floor),
             orientation_weight,
         )
-    outlier_weight = _outlier_weight(cast_zc, config)
-    confidence = np.where(valid, strength * orientation_weight * outlier_weight, 0.0)
-    return np.clip(confidence, 0.0, 1.0).astype(np.float32)
+    orientation_weight = np.broadcast_to(orientation_weight, cast_zc.shape).astype(np.float32)
+    relbearing_confidence = np.broadcast_to(
+        np.isfinite(relbearing_deg).reshape(-1, 1),
+        cast_zc.shape,
+    ).astype(np.float32)
+    bad_data_confidence = _bad_data_confidence(
+        cast_zc=cast_zc,
+        bad_data_mask=bad_data_mask,
+        isolated_extreme_outlier_mask=isolated_extreme_outlier_mask,
+        config=config,
+    )
+    confidence = (
+        strength
+        * baseline_confidence
+        * orientation_weight
+        * relbearing_confidence
+        * bad_data_confidence
+    )
+    confidence = np.where(valid, confidence, 0.0)
+    return {
+        "zc_strength_confidence": np.clip(strength, 0.0, 1.0).astype(np.float32),
+        "baseline_confidence": np.clip(baseline_confidence, 0.0, 1.0).astype(np.float32),
+        "orientation_confidence_on_cast_depth": np.clip(
+            orientation_weight,
+            0.0,
+            1.0,
+        ).astype(np.float32),
+        "relbearing_valid_confidence": np.clip(relbearing_confidence, 0.0, 1.0).astype(np.float32),
+        "bad_data_confidence": np.clip(bad_data_confidence, 0.0, 1.0).astype(np.float32),
+        "final_label_confidence": np.clip(confidence, 0.0, 1.0).astype(np.float32),
+    }
 
 
-def _outlier_weight(cast_zc: np.ndarray, config: dict[str, Any]) -> np.ndarray:
+def _baseline_confidence(
+    baseline_valid: np.ndarray,
+    baseline_finite_fraction: np.ndarray,
+) -> np.ndarray:
+    finite_fraction = np.asarray(baseline_finite_fraction, dtype=np.float32)
+    if finite_fraction.shape != baseline_valid.shape:
+        finite_fraction = np.where(baseline_valid, 1.0, 0.0).astype(np.float32)
+    return np.where(baseline_valid, np.clip(finite_fraction, 0.0, 1.0), 0.0).astype(np.float32)
+
+
+def _bad_data_confidence(
+    *,
+    cast_zc: np.ndarray,
+    bad_data_mask: np.ndarray,
+    isolated_extreme_outlier_mask: np.ndarray,
+    config: dict[str, Any],
+) -> np.ndarray:
     if not bool(config.get("environment_outlier_downweight", True)):
-        return np.ones(cast_zc.shape, dtype=np.float32)
-    zc_min = float(config.get("outlier_zc_min", 0.0))
-    zc_max = float(config.get("outlier_zc_max", 20.0))
-    downweight = float(config.get("outlier_downweight", 0.50))
-    outlier = (~np.isfinite(cast_zc)) | (cast_zc < zc_min) | (cast_zc > zc_max)
-    return np.where(outlier, downweight, 1.0).astype(np.float32)
+        confidence = np.ones(cast_zc.shape, dtype=np.float32)
+    else:
+        zc_min = float(config.get("outlier_zc_min", 0.0))
+        zc_max = float(config.get("outlier_zc_max", 20.0))
+        downweight = float(config.get("outlier_downweight", 0.50))
+        environment_outlier = (~np.isfinite(cast_zc)) | (cast_zc < zc_min) | (cast_zc > zc_max)
+        confidence = np.where(environment_outlier, downweight, 1.0).astype(np.float32)
+    isolated_downweight = float(config.get("isolated_extreme_outlier_confidence", 0.10))
+    bad_data_floor = float(config.get("bad_data_confidence", 0.0))
+    confidence = np.where(isolated_extreme_outlier_mask, isolated_downweight, confidence)
+    confidence = np.where(bad_data_mask, np.minimum(confidence, bad_data_floor), confidence)
+    return confidence.astype(np.float32)
 
 
 def _rotate_candidate_set(
@@ -427,11 +584,13 @@ def _rotate_candidate_set(
     evidence_flags: np.ndarray,
     relative_drop: np.ndarray,
     zc_ratio: np.ndarray,
+    bad_data_masks: dict[str, np.ndarray],
+    confidence_components: dict[str, np.ndarray],
     relbearing_deg: np.ndarray,
     cast_azimuth_deg: np.ndarray,
     convention: str,
 ) -> dict[str, np.ndarray]:
-    return {
+    rotated = {
         "presence": _rotate_rows(presence, relbearing_deg, cast_azimuth_deg, convention).astype(
             np.int8
         ),
@@ -460,6 +619,21 @@ def _rotate_candidate_set(
             np.float32
         ),
     }
+    for key, value in bad_data_masks.items():
+        rotated[key] = _rotate_rows(
+            value,
+            relbearing_deg,
+            cast_azimuth_deg,
+            convention,
+        ).astype(bool)
+    for key, value in confidence_components.items():
+        rotated[key] = _rotate_rows(
+            value,
+            relbearing_deg,
+            cast_azimuth_deg,
+            convention,
+        ).astype(np.float32)
+    return rotated
 
 
 def _rotate_rows(
@@ -472,13 +646,62 @@ def _rotate_rows(
     output = np.empty_like(array)
     step = float(np.median(np.diff(cast_azimuth_deg))) if cast_azimuth_deg.size > 1 else 360.0
     direction = 1 if convention == "plus" else -1
-    for row_index in range(array.shape[0]):
-        relbearing = relbearing_deg[row_index] if row_index < relbearing_deg.size else np.nan
-        offset_bins = (
-            0 if not np.isfinite(relbearing) else int(round(direction * relbearing / step))
-        )
-        output[row_index] = np.roll(array[row_index], offset_bins)
+    relbearing = np.full(array.shape[0], np.nan, dtype=np.float32)
+    relbearing[: min(array.shape[0], relbearing_deg.size)] = relbearing_deg[
+        : min(array.shape[0], relbearing_deg.size)
+    ]
+    offsets = np.zeros(array.shape[0], dtype=np.int32)
+    finite = np.isfinite(relbearing)
+    offsets[finite] = np.rint(direction * relbearing[finite] / step).astype(np.int32)
+    for offset in np.unique(offsets):
+        rows = offsets == offset
+        output[rows] = np.roll(array[rows], int(offset), axis=1)
     return output
+
+
+def _component_summaries(rotated: dict[str, np.ndarray]) -> dict[str, dict[str, Any]]:
+    return {
+        key: summarize_array(key, rotated[key]).to_dict()
+        for key in (
+            "zc_strength_confidence",
+            "baseline_confidence",
+            "orientation_confidence_on_cast_depth",
+            "relbearing_valid_confidence",
+            "bad_data_confidence",
+            "final_label_confidence",
+        )
+        if key in rotated
+    }
+
+
+def _bad_data_summary(masks: dict[str, np.ndarray]) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    for key, mask in masks.items():
+        array = np.asarray(mask, dtype=bool)
+        summary[key] = {
+            "count": int(np.count_nonzero(array)),
+            "fraction": _mask_fraction(array),
+            "depth_fraction": _axis_fraction_stats(array, axis=1),
+            "azimuth_fraction": _axis_fraction_stats(array, axis=0),
+        }
+    return summary
+
+
+def _axis_fraction_stats(mask: np.ndarray, *, axis: int) -> dict[str, float | None]:
+    if mask.size == 0:
+        return {"min": None, "max": None, "mean": None}
+    values = np.mean(np.asarray(mask, dtype=bool), axis=axis)
+    return {
+        "min": float(np.min(values)),
+        "max": float(np.max(values)),
+        "mean": float(np.mean(values)),
+    }
+
+
+def _mask_fraction(mask: np.ndarray) -> float | None:
+    if mask.size == 0:
+        return None
+    return float(np.mean(np.asarray(mask, dtype=bool)))
 
 
 def _candidate_coverage(presence: np.ndarray) -> float | None:

@@ -6,7 +6,10 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 from scipy.io import savemat
+
+pytest.importorskip("matplotlib")
 
 
 def _write_synthetic_inputs(tmp_path: Path) -> dict[str, Path]:

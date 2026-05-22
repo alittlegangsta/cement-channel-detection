@@ -12,6 +12,7 @@ if str(SRC_DIR) not in sys.path:
 
 from cement_channel.data.manifest import ManifestBuildError, load_paths_config  # noqa: E402
 from cement_channel.visualization.label_review import generate_label_review_figures  # noqa: E402
+from cement_channel.visualization.matplotlib_utils import PlottingDependencyError  # noqa: E402
 
 
 class LabelReviewCliError(RuntimeError):
@@ -74,6 +75,7 @@ def main() -> int:
         ValueError,
         KeyError,
         FileNotFoundError,
+        PlottingDependencyError,
     ) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

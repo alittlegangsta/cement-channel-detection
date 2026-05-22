@@ -86,11 +86,60 @@ channel_candidate =
 - relative drop strength
 - orientation confidence
 - baseline validity
+- RelBearing finite/valid status
+- bad-data confidence
 - environment / outlier warnings
 
 低井斜或 RelBearing 不可靠位置只降低 confidence，不直接删除。
 
+MVP-3R 必须拆解并输出以下分量，报告中应能解释低 confidence 的主因：
+
+```text
+zc_strength_confidence
+baseline_confidence
+orientation_confidence_on_cast_depth
+relbearing_valid_confidence
+bad_data_confidence
+final_label_confidence
+```
+
+## Bad-Data Mask
+
+候选生成前必须标记以下 bad-data 单元：
+
+- non-finite `Zc`
+- `Zc <= 0`
+- extreme `relative_drop > 0.95`
+
+bad-data 单元不得直接触发 severe label。isolated extreme outlier 需要在报告和
+review figure 中单独标出；若保留为候选上下文，只能降低 confidence，不能提高
+severity。
+
+## Threshold Sensitivity
+
+MVP-3R 必须运行阈值敏感性网格：
+
+```text
+alpha: [0.30, 0.35, 0.40]
+zc_min_limit: [2.0, 2.5, 3.0]
+severity threshold sets:
+  default: [0.30, 0.45, 0.60]
+  conservative: [0.35, 0.50, 0.65]
+  aggressive: [0.25, 0.40, 0.55]
+```
+
+每组至少统计 plus/minus coverage、plus/minus disagreement、规则触发来源、
+mean label confidence、low-confidence fraction、severity distribution、
+connected component count、isolated speckle ratio、`relative_drop > 0.95`
+outlier fraction 和 invalid/bad `Zc` fraction。该报告用于人工阈值复核，不
+生成 final labels。
+
 ## Review And Gate
 
-MVP-3 完成后必须输出 candidate audit 和 review figures。只有 gate report 明确
+MVP-3 完成后必须输出 candidate audit 和 review figures。MVP-3R review figures
+必须使用无 GUI 可运行的 matplotlib Agg backend，并包含 colorbar、depth axis、
+azimuth axis、标题、confidence 拆解图、bad-data overlay、relative-drop outlier
+overlay、plus/minus disagreement map，以及只在 candidate 区域显示的 severity map。
+
+只有 gate report 明确
 `go` 或 `conditional_go`，且未声称 final labels，才允许进入 MVP-4。

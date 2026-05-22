@@ -1065,6 +1065,42 @@ cast_azimuth_aligned_deg
 metadata_json
 ```
 
+MVP-3R 诊断版候选必须额外保存 confidence 分量和 bad-data mask，便于解释低
+confidence 区间和白线/异常线：
+
+```text
+zc_strength_confidence_plus
+baseline_confidence_plus
+orientation_confidence_on_cast_depth_plus
+relbearing_valid_confidence_plus
+bad_data_confidence_plus
+final_label_confidence_plus
+bad_data_mask_plus
+relative_drop_outlier_plus
+isolated_extreme_outlier_plus
+zc_strength_confidence_minus_ablation
+baseline_confidence_minus_ablation
+orientation_confidence_on_cast_depth_minus_ablation
+relbearing_valid_confidence_minus_ablation
+bad_data_confidence_minus_ablation
+final_label_confidence_minus_ablation
+bad_data_mask_minus_ablation
+relative_drop_outlier_minus_ablation
+isolated_extreme_outlier_minus_ablation
+```
+
+`bad_data_mask_*` 至少包含 non-finite `Zc`、`Zc <= 0` 和
+`relative_drop > 0.95`。bad-data 单元必须保持 `presence = -1`、`severity = -1`
+或其它 invalid 表达，不得因为极端低 `Zc` 被提升为 severe candidate。
+
+阈值敏感性输出只属于 reports，不属于标签产物：
+
+```text
+label_threshold_sensitivity_v001.md
+label_threshold_sensitivity_v001.json
+label_threshold_sensitivity_v001.csv
+```
+
 MVP-3 候选规则不得只依赖固定阈值，必须包含自适应 `Zc_base` 和
 `relative_drop`。若 `zc_min_limit` 未经人工确认，报告必须标记为
 `requires_human_threshold_confirmation`。

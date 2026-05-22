@@ -6,6 +6,9 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
+
+pytest.importorskip("matplotlib")
 
 
 def test_generate_label_review_figures_cli_outputs_review_dir(tmp_path: Path) -> None:
@@ -33,6 +36,13 @@ def test_generate_label_review_figures_cli_outputs_review_dir(tmp_path: Path) ->
         presence_minus_ablation=presence,
         label_confidence_plus=np.where(presence == 1, 0.8, 0.1).astype(np.float32),
         severity_plus=np.where(presence == 1, 2, 0).astype(np.int8),
+        zc_strength_confidence_plus=np.where(presence == 1, 0.9, 0.1).astype(np.float32),
+        baseline_confidence_plus=np.ones_like(zc, dtype=np.float32),
+        orientation_confidence_on_cast_depth_plus=np.ones_like(zc, dtype=np.float32) * 0.7,
+        relbearing_valid_confidence_plus=np.ones_like(zc, dtype=np.float32),
+        bad_data_confidence_plus=np.ones_like(zc, dtype=np.float32),
+        bad_data_mask_plus=np.zeros_like(zc, dtype=bool),
+        relative_drop_outlier_plus=np.zeros_like(zc, dtype=bool),
         no_final_labels=np.asarray(True),
     )
     paths_config = tmp_path / "paths.yaml"
@@ -68,5 +78,7 @@ def test_generate_label_review_figures_cli_outputs_review_dir(tmp_path: Path) ->
     review_dir = reports_dir / "label_review_v001"
     summary = json.loads((review_dir / "label_review_summary_v001.json").read_text())
     assert summary["no_final_labels"] is True
+    assert len(summary["figures"]) == 16
     assert (review_dir / "01_cast_zc_raw.png").read_bytes().startswith(b"\x89PNG")
+    assert (review_dir / "14_bad_data_confidence.png").read_bytes().startswith(b"\x89PNG")
     assert (review_dir / "review_summary_template.md").exists()

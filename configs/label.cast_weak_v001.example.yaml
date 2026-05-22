@@ -54,12 +54,21 @@ confidence:
   low_inc_downweight: true
   environment_outlier_downweight: true
   baseline_invalid_confidence: 0.0
+  bad_data_confidence: 0.0
+  isolated_extreme_outlier_confidence: 0.10
   non_candidate_confidence_scale: 0.25
   relative_drop_full_confidence: 0.70
   orientation_floor: 0.05
   outlier_zc_min: 0.0
   outlier_zc_max: 20.0
   outlier_downweight: 0.50
+
+bad_data:
+  nonfinite_zc_invalid: true
+  nonpositive_zc_invalid: true
+  extreme_relative_drop_threshold: 0.95
+  isolated_extreme_max_pixels: 3
+  do_not_promote_bad_data_to_severe: true
 
 audit:
   isolated_object_max_pixels: 3
