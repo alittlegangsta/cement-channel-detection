@@ -212,3 +212,22 @@ If all non-degenerate class-balanced configurations fail to exceed the
 permutation sanity baseline, the remediation remains `no_go`. If only
 `confidence_only` improves while class-balanced policies do not, the result is
 treated as a sample-weight artifact rather than evidence to proceed.
+
+## MVP-4B-R Remediation Gate
+
+The remediation gate must require:
+
+```text
+class-balanced non-degenerate baseline above permutation
+real - permutation balanced_accuracy margin >= 0.03
+predicted_positive_rate not near 0 or 1
+support from at least two depth-block folds
+candidate effective weight fraction within cap
+enhanced transformed feature finite ratio = 1.0
+plus/minus disagreement strategy documented
+no final labels
+no STC / APES / deep learning / MVP-4C implementation already performed
+```
+
+Failure of these checks keeps the decision at `no_go` and recommends returning
+to label sampling or feature design instead of escalating model complexity.

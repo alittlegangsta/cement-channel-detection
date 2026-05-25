@@ -2102,3 +2102,10 @@ enhanced normalized features, late/early ratio only, and energy-window features
 against unweighted, confidence-only, class-balanced, and capped class-balanced
 weighting policies. These ablations are not large-scale tuning and must still
 run the permutation sanity check.
+
+The MVP-4B-R remediation gate consumes the no-go diagnostics, sample-weight
+policy report, enhanced feature report, and remediation ablation report. It may
+allow only consideration of MVP-4C when a class-balanced, non-degenerate result
+exceeds the permutation baseline by the gate margin and is supported by more
+than one depth-block fold. A `no_go` decision keeps the project in label and
+feature design review.
