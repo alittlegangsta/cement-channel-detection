@@ -1278,6 +1278,32 @@ sample weights invalid
 any report enters deep learning, STC, APES, MVP-5, or production training
 ```
 
+### 9.4.3 MVP-4B no-go diagnostics
+
+若 MVP-4B Stage 2 因 permutation sanity check 不通过而 `no_go`，只允许进入 no-go
+diagnostics。该诊断阶段不得训练复杂模型，不得进入 MVP-4C，不得生成 final labels。
+
+诊断必须回答：
+
+```text
+simple baseline 是否退化成单类预测
+sample_weight 是否导致有效正负类权重失衡
+depth-block split 是否造成 fold 分布偏移
+去掉 plus/minus disagreement 后 signal 是否改善
+提高 confidence 阈值后 signal 是否改善
+是否应回退到标签或特征设计
+```
+
+允许输出：
+
+```text
+baseline_failure_diagnostics_v001.md
+baseline_failure_diagnostics_v001.json
+baseline_failure_diagnostics_v001/
+```
+
+诊断结论只能作为 no-go 原因分析，不得作为正式模型性能，也不得解除 MVP-4C gate。
+
 ---
 
 ### 9.5 深度错位检验
