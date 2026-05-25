@@ -190,3 +190,25 @@ receiver-level side-normalized metrics are skipped and reported if unavailable
 
 If enhanced transformed features produce substantial non-finite values, the
 remediation remains `no_go` and must return to feature preprocessing review.
+
+## MVP-4B-R Remediation Ablation Evaluation
+
+Controlled remediation ablations must report:
+
+```text
+balanced_accuracy
+weighted_accuracy
+precision / recall / f1
+predicted_positive_rate
+candidate effective weight fraction
+permutation balanced_accuracy
+real - permutation margin
+per-fold metrics
+single-class prediction degeneracy
+leakage warning
+```
+
+If all non-degenerate class-balanced configurations fail to exceed the
+permutation sanity baseline, the remediation remains `no_go`. If only
+`confidence_only` improves while class-balanced policies do not, the result is
+treated as a sample-weight artifact rather than evidence to proceed.

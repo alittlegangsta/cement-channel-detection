@@ -2096,3 +2096,9 @@ The remediation gate may change the decision only when a class-balanced,
 non-degenerate baseline beats the permutation sanity baseline by the configured
 margin across valid depth-block folds. Otherwise the result remains `no_go` and
 the next step is label or feature design review.
+
+Controlled remediation ablations must compare original transformed features,
+enhanced normalized features, late/early ratio only, and energy-window features
+against unweighted, confidence-only, class-balanced, and capped class-balanced
+weighting policies. These ablations are not large-scale tuning and must still
+run the permutation sanity check.

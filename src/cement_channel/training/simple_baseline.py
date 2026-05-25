@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -52,6 +52,163 @@ class SimpleBaselineReport:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class RemediationAblationScenario:
+    scenario_name: str
+    feature_set: str
+    weight_policy: str
+    disagreement_strategy: str
+    max_depth_match_error_ft: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class BaselineRemediationAblationReport:
+    report_version: str
+    generated_at: str
+    inputs: dict[str, str]
+    scenario_count: int
+    model_count: int
+    best_non_degenerate_margin: float | None
+    best_non_degenerate_scenario: dict[str, Any] | None
+    no_go_reasons: list[str]
+    summary_rows: list[dict[str, Any]]
+    per_fold_metrics: list[dict[str, Any]]
+    class_balanced_non_degenerate_above_permutation: bool
+    only_confidence_only_effective: bool
+    no_final_labels: bool
+    no_deep_learning: bool
+    no_stc: bool
+    no_apes: bool
+    no_mvp4c: bool
+    warnings: list[str]
+    errors: list[str]
+    not_performed: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+BASELINE_REMEDIATION_ABLATION_VERSION = "baseline_remediation_ablation_v001"
+
+DEFAULT_REMEDIATION_ABLATIONS = (
+    RemediationAblationScenario(
+        "original_confidence_include_d05",
+        "original_transformed",
+        "confidence_only",
+        "include",
+        0.5,
+    ),
+    RemediationAblationScenario(
+        "original_unweighted_include_d05",
+        "original_transformed",
+        "unweighted",
+        "include",
+        0.5,
+    ),
+    RemediationAblationScenario(
+        "original_balanced_include_d05",
+        "original_transformed",
+        "class_balanced_confidence",
+        "include",
+        0.5,
+    ),
+    RemediationAblationScenario(
+        "original_capped_include_d05",
+        "original_transformed",
+        "capped_class_balanced_confidence",
+        "include",
+        0.5,
+    ),
+    RemediationAblationScenario(
+        "enhanced_confidence_include_d05",
+        "enhanced_normalized",
+        "confidence_only",
+        "include",
+        0.5,
+    ),
+    RemediationAblationScenario(
+        "enhanced_unweighted_include_d05",
+        "enhanced_normalized",
+        "unweighted",
+        "include",
+        0.5,
+    ),
+    RemediationAblationScenario(
+        "enhanced_balanced_include_d05",
+        "enhanced_normalized",
+        "class_balanced_confidence",
+        "include",
+        0.5,
+    ),
+    RemediationAblationScenario(
+        "enhanced_capped_include_d05",
+        "enhanced_normalized",
+        "capped_class_balanced_confidence",
+        "include",
+        0.5,
+    ),
+    RemediationAblationScenario(
+        "enhanced_capped_exclude_disagreement_d05",
+        "enhanced_normalized",
+        "capped_class_balanced_confidence",
+        "exclude",
+        0.5,
+    ),
+    RemediationAblationScenario(
+        "enhanced_capped_downweight_disagreement_d05",
+        "enhanced_normalized",
+        "capped_class_balanced_confidence",
+        "downweight",
+        0.5,
+    ),
+    RemediationAblationScenario(
+        "enhanced_capped_include_d025",
+        "enhanced_normalized",
+        "capped_class_balanced_confidence",
+        "include",
+        0.25,
+    ),
+    RemediationAblationScenario(
+        "enhanced_capped_exclude_disagreement_d025",
+        "enhanced_normalized",
+        "capped_class_balanced_confidence",
+        "exclude",
+        0.25,
+    ),
+    RemediationAblationScenario(
+        "late_ratio_unweighted_include_d05",
+        "late_over_early_ratio_only",
+        "unweighted",
+        "include",
+        0.5,
+    ),
+    RemediationAblationScenario(
+        "late_ratio_capped_include_d05",
+        "late_over_early_ratio_only",
+        "capped_class_balanced_confidence",
+        "include",
+        0.5,
+    ),
+    RemediationAblationScenario(
+        "energy_unweighted_include_d05",
+        "energy_window_features_only",
+        "unweighted",
+        "include",
+        0.5,
+    ),
+    RemediationAblationScenario(
+        "energy_capped_include_d05",
+        "energy_window_features_only",
+        "capped_class_balanced_confidence",
+        "include",
+        0.5,
+    ),
+)
+
+
 def run_simple_baseline_from_config(
     *,
     sample_table_npz: Path | str,
@@ -78,6 +235,120 @@ def run_simple_baseline(
             "sample_table_npz": str(sample_table_npz),
             "baseline_config_path": str(baseline_config_path) if baseline_config_path else "",
         },
+    )
+
+
+def run_baseline_remediation_ablation_from_config(
+    *,
+    sample_table_npz: Path | str,
+    baseline_config_path: Path | str,
+) -> BaselineRemediationAblationReport:
+    arrays = _load_npz(sample_table_npz)
+    config = load_baseline_config(baseline_config_path)
+    return run_baseline_remediation_ablation(
+        arrays=arrays,
+        baseline_config=config,
+        inputs={
+            "sample_table_npz": str(sample_table_npz),
+            "baseline_config_path": str(baseline_config_path),
+        },
+    )
+
+
+def run_baseline_remediation_ablation(
+    *,
+    arrays: dict[str, np.ndarray],
+    baseline_config: BaselineConfig,
+    inputs: dict[str, str] | None = None,
+    scenarios: tuple[RemediationAblationScenario, ...] = DEFAULT_REMEDIATION_ABLATIONS,
+) -> BaselineRemediationAblationReport:
+    warnings: list[str] = []
+    errors: list[str] = []
+    summary_rows: list[dict[str, Any]] = []
+    per_fold_rows: list[dict[str, Any]] = []
+    for scenario in scenarios:
+        scenario_arrays = _arrays_for_remediation_scenario(arrays, scenario)
+        scenario_config = replace(
+            baseline_config,
+            exclude_plus_minus_disagreement=scenario.disagreement_strategy == "exclude",
+        )
+        report, prediction_rows = run_simple_baseline_from_arrays(
+            arrays=scenario_arrays,
+            baseline_config=scenario_config,
+            inputs={
+                **(inputs or {}),
+                "scenario_name": scenario.scenario_name,
+                "feature_set": scenario.feature_set,
+                "weight_policy": scenario.weight_policy,
+                "disagreement_strategy": scenario.disagreement_strategy,
+                "max_depth_match_error_ft": str(scenario.max_depth_match_error_ft),
+            },
+        )
+        warnings.extend(
+            f"{scenario.scenario_name}: {message}" for message in report.warnings
+        )
+        for message in report.errors:
+            if "permutation balanced_accuracy is not lower" not in message:
+                errors.append(f"{scenario.scenario_name}: {message}")
+        summary_rows.extend(
+            _remediation_summary_rows(
+                scenario=scenario,
+                report=report,
+                prediction_rows=prediction_rows,
+            )
+        )
+        per_fold_rows.extend(
+            _remediation_per_fold_rows(
+                scenario=scenario,
+                fold_metrics=report.fold_metrics,
+            )
+        )
+
+    best_row = _best_non_degenerate_row(summary_rows)
+    no_go_reasons = _remediation_no_go_reasons(summary_rows, baseline_config)
+    only_confidence_effective = _only_confidence_only_effective(
+        summary_rows,
+        baseline_config.min_permutation_balanced_accuracy_margin,
+    )
+    if only_confidence_effective:
+        no_go_reasons.append("sample_weight_artifact")
+    return BaselineRemediationAblationReport(
+        report_version=BASELINE_REMEDIATION_ABLATION_VERSION,
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        inputs=inputs or {},
+        scenario_count=len(scenarios),
+        model_count=len(baseline_config.model_types),
+        best_non_degenerate_margin=(
+            None if best_row is None else _as_float(best_row.get("real_minus_permutation_margin"))
+        ),
+        best_non_degenerate_scenario=best_row,
+        no_go_reasons=sorted(set(no_go_reasons)),
+        summary_rows=summary_rows,
+        per_fold_metrics=per_fold_rows,
+        class_balanced_non_degenerate_above_permutation=_has_class_balanced_success(
+            summary_rows,
+            baseline_config.min_permutation_balanced_accuracy_margin,
+        ),
+        only_confidence_only_effective=only_confidence_effective,
+        no_final_labels=True,
+        no_deep_learning=True,
+        no_stc=True,
+        no_apes=True,
+        no_mvp4c=True,
+        warnings=warnings,
+        errors=errors,
+        not_performed=[
+            "formal model performance claim",
+            "large-scale hyperparameter tuning",
+            "production model training",
+            "model weight export",
+            "final label generation",
+            "ground truth claim",
+            "STC",
+            "APES",
+            "deep learning",
+            "MVP-4C",
+        ],
     )
 
 
@@ -625,6 +896,93 @@ def format_simple_baseline_markdown(report: SimpleBaselineReport) -> str:
     return "\n".join(lines)
 
 
+def write_baseline_remediation_ablation_outputs(
+    report: BaselineRemediationAblationReport,
+    *,
+    output_report_md: Path,
+    output_report_json: Path,
+    output_csv: Path,
+    overwrite: bool,
+) -> None:
+    _ensure_can_write(output_report_md, overwrite=overwrite)
+    _ensure_can_write(output_report_json, overwrite=overwrite)
+    _ensure_can_write(output_csv, overwrite=overwrite)
+    output_report_md.parent.mkdir(parents=True, exist_ok=True)
+    output_report_json.parent.mkdir(parents=True, exist_ok=True)
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+    output_report_json.write_text(
+        json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    output_report_md.write_text(
+        format_baseline_remediation_ablation_markdown(report),
+        encoding="utf-8",
+    )
+    _write_summary_csv(report.summary_rows, output_csv)
+
+
+def format_baseline_remediation_ablation_markdown(
+    report: BaselineRemediationAblationReport,
+) -> str:
+    lines = [
+        "# MVP-4B-R Baseline Remediation Ablation",
+        "",
+        "These results are remediation sanity checks against CAST weak-label "
+        "candidates. They are not formal model performance, final labels, or "
+        "production readiness evidence.",
+        "",
+        "## Scope",
+        "",
+        f"- report_version: `{report.report_version}`",
+        f"- scenario_count: {report.scenario_count}",
+        f"- model_count: {report.model_count}",
+        f"- no_final_labels: `{report.no_final_labels}`",
+        f"- no_deep_learning: `{report.no_deep_learning}`",
+        f"- no_stc: `{report.no_stc}`",
+        f"- no_apes: `{report.no_apes}`",
+        f"- no_mvp4c: `{report.no_mvp4c}`",
+        "",
+        "## Best Non-Degenerate Scenario",
+        "",
+    ]
+    if report.best_non_degenerate_scenario:
+        best = report.best_non_degenerate_scenario
+        lines.append(
+            "- "
+            f"{best['scenario_name']} / {best['model_type']}: "
+            f"balanced_accuracy={best['balanced_accuracy']}, "
+            f"permutation={best['permutation_balanced_accuracy']}, "
+            f"margin={best['real_minus_permutation_margin']}, "
+            f"predicted_positive_rate={best['predicted_positive_rate']}"
+        )
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Summary Rows", ""])
+    for row in report.summary_rows:
+        lines.append(
+            "- "
+            f"{row['scenario_name']} / {row['model_type']}: "
+            f"features={row['feature_set']}, weight={row['weight_policy']}, "
+            f"filter={row['disagreement_strategy']}, "
+            f"depth_error={row['max_depth_match_error_ft']}, "
+            f"balanced_accuracy={row['balanced_accuracy']}, "
+            f"permutation={row['permutation_balanced_accuracy']}, "
+            f"margin={row['real_minus_permutation_margin']}, "
+            f"predicted_positive_rate={row['predicted_positive_rate']}, "
+            f"degenerate={row['degenerate_prediction']}"
+        )
+    lines.extend(["", "## No-Go Reasons", ""])
+    lines.extend(_message_lines(report.no_go_reasons))
+    lines.extend(["", "## Warnings", ""])
+    lines.extend(_message_lines(report.warnings))
+    lines.extend(["", "## Errors", ""])
+    lines.extend(_message_lines(report.errors))
+    lines.extend(["", "## Not Performed", ""])
+    lines.extend(_message_lines(report.not_performed))
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _run_fold(
     *,
     prepared: dict[str, Any],
@@ -905,6 +1263,327 @@ def _empty_metrics() -> dict[str, Any]:
         "brier": None,
         "calibration_summary": [],
     }
+
+
+def _arrays_for_remediation_scenario(
+    arrays: dict[str, np.ndarray],
+    scenario: RemediationAblationScenario,
+) -> dict[str, np.ndarray]:
+    features, feature_names = _feature_matrix_for_remediation(arrays, scenario.feature_set)
+    weights = _weights_for_remediation(arrays, scenario.weight_policy)
+    disagreement = np.asarray(
+        arrays.get("plus_minus_disagreement", np.zeros(weights.shape, dtype=bool)),
+        dtype=bool,
+    ).reshape(-1)
+    if scenario.disagreement_strategy == "downweight":
+        weights = weights.copy()
+        weights[disagreement] *= 0.5
+    depth_error = np.asarray(
+        arrays.get("depth_match_error", np.zeros(weights.shape, dtype=np.float32)),
+        dtype=np.float32,
+    ).reshape(-1)
+    existing_large_error = np.asarray(
+        arrays.get("exclude_large_depth_match_error", np.zeros(weights.shape, dtype=bool)),
+        dtype=bool,
+    ).reshape(-1)
+    large_error = existing_large_error | (
+        np.abs(depth_error) > float(scenario.max_depth_match_error_ft)
+    )
+    updated = dict(arrays)
+    updated["transformed_features"] = features.astype(np.float32)
+    updated["transformed_feature_names"] = np.asarray(feature_names)
+    updated["sample_weight"] = weights.astype(np.float32)
+    updated["exclude_large_depth_match_error"] = large_error
+    updated["no_final_labels"] = np.asarray(True)
+    updated["no_stc"] = np.asarray(True)
+    updated["no_apes"] = np.asarray(True)
+    if "sample_id" not in updated:
+        updated["sample_id"] = np.arange(features.shape[0], dtype=np.int64)
+    return updated
+
+
+def _feature_matrix_for_remediation(
+    arrays: dict[str, np.ndarray],
+    feature_set: str,
+) -> tuple[np.ndarray, list[str]]:
+    transformed = np.asarray(arrays["transformed_features"], dtype=np.float32)
+    transformed_names = np.asarray(arrays["transformed_feature_names"]).astype(str).tolist()
+    if feature_set == "enhanced_normalized":
+        return transformed, transformed_names
+    if feature_set == "original_transformed":
+        if "transformed_features_original" in arrays:
+            names = np.asarray(arrays["transformed_feature_names_original"]).astype(str).tolist()
+            return np.asarray(arrays["transformed_features_original"], dtype=np.float32), names
+        count = int(np.asarray(arrays.get("base_transformed_feature_count", transformed.shape[1])))
+        return transformed[:, :count], transformed_names[:count]
+    raw_features = np.asarray(arrays["features"], dtype=np.float32)
+    raw_names = np.asarray(arrays["feature_names"]).astype(str).tolist()
+    if feature_set == "late_over_early_ratio_only":
+        indices = _required_feature_indices(raw_names, ["late_over_early_ratio"])
+        return raw_features[:, indices], ["late_over_early_ratio"]
+    if feature_set == "energy_window_features_only":
+        names = ["early_energy", "late_energy", "late_over_early_ratio"]
+        indices = _required_feature_indices(raw_names, names)
+        return raw_features[:, indices], names
+    raise ValueError(f"Unsupported remediation feature_set: {feature_set}")
+
+
+def _weights_for_remediation(
+    arrays: dict[str, np.ndarray],
+    weight_policy: str,
+) -> np.ndarray:
+    if weight_policy == "sample_weight":
+        field_name = "sample_weight"
+    else:
+        field_name = f"sample_weight_{weight_policy}"
+    if field_name in arrays:
+        return np.asarray(arrays[field_name], dtype=np.float32).reshape(-1)
+    if weight_policy == "confidence_only" and "sample_weight_original" in arrays:
+        return np.asarray(arrays["sample_weight_original"], dtype=np.float32).reshape(-1)
+    raise KeyError(f"Sample table is missing weight policy field: {field_name}")
+
+
+def _required_feature_indices(raw_names: list[str], names: list[str]) -> list[int]:
+    missing = [name for name in names if name not in raw_names]
+    if missing:
+        raise KeyError("Sample table missing feature(s): " + ", ".join(missing))
+    return [raw_names.index(name) for name in names]
+
+
+def _remediation_summary_rows(
+    *,
+    scenario: RemediationAblationScenario,
+    report: SimpleBaselineReport,
+    prediction_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for model_type, metrics in report.aggregate_metrics.items():
+        check = _as_dict(report.permutation_check.get(model_type))
+        distribution = _prediction_distribution_for_model(prediction_rows, model_type)
+        margin = _as_float(check.get("balanced_accuracy_margin"))
+        predicted_rate = _as_float(distribution.get("predicted_positive_rate"))
+        degenerate = (
+            predicted_rate is None or predicted_rate <= 0.05 or predicted_rate >= 0.95
+        )
+        rows.append(
+            {
+                "scenario_name": scenario.scenario_name,
+                "model_type": model_type,
+                "feature_set": scenario.feature_set,
+                "weight_policy": scenario.weight_policy,
+                "disagreement_strategy": scenario.disagreement_strategy,
+                "max_depth_match_error_ft": scenario.max_depth_match_error_ft,
+                "selected_samples": report.sample_counts.get("selected_samples"),
+                "candidate_count": report.class_balance.get("candidate_count"),
+                "non_candidate_count": report.class_balance.get("non_candidate_count"),
+                "candidate_effective_weight_fraction": distribution.get(
+                    "candidate_effective_weight_fraction"
+                ),
+                "balanced_accuracy": metrics.get("balanced_accuracy"),
+                "weighted_accuracy": metrics.get("weighted_accuracy"),
+                "precision": metrics.get("precision"),
+                "recall": metrics.get("recall"),
+                "f1": metrics.get("f1"),
+                "predicted_positive_rate": predicted_rate,
+                "score_min": distribution.get("score_min"),
+                "score_median": distribution.get("score_median"),
+                "score_max": distribution.get("score_max"),
+                "permutation_balanced_accuracy": check.get(
+                    "permutation_balanced_accuracy"
+                ),
+                "real_minus_permutation_margin": margin,
+                "passes_configured_margin": check.get("passes_margin"),
+                "folds_above_permutation": _folds_above_permutation(
+                    report.fold_metrics,
+                    model_type,
+                ),
+                "degenerate_prediction": degenerate,
+                "leakage_suspected": report.leakage_suspected,
+                "permutation_error_present": any(
+                    model_type in error
+                    and "permutation balanced_accuracy is not lower" in error
+                    for error in report.errors
+                ),
+                "scenario_error_count": len(report.errors),
+            }
+        )
+    return rows
+
+
+def _remediation_per_fold_rows(
+    *,
+    scenario: RemediationAblationScenario,
+    fold_metrics: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for row in fold_metrics:
+        rows.append(
+            {
+                "scenario_name": scenario.scenario_name,
+                "feature_set": scenario.feature_set,
+                "weight_policy": scenario.weight_policy,
+                "disagreement_strategy": scenario.disagreement_strategy,
+                "max_depth_match_error_ft": scenario.max_depth_match_error_ft,
+                "model_type": row["model_type"],
+                "fold_index": row["fold_index"],
+                "permutation": row["permutation"],
+                "metrics": row["metrics"],
+            }
+        )
+    return rows
+
+
+def _prediction_distribution_for_model(
+    prediction_rows: list[dict[str, Any]],
+    model_type: str,
+) -> dict[str, float | int | None]:
+    rows = [row for row in prediction_rows if row["model_type"] == model_type]
+    if not rows:
+        return {
+            "sample_count": 0,
+            "predicted_positive_rate": None,
+            "score_min": None,
+            "score_median": None,
+            "score_max": None,
+            "candidate_effective_weight_fraction": None,
+        }
+    scores = np.array([float(row["score"]) for row in rows], dtype=np.float32)
+    predictions = np.array([int(row["prediction"]) for row in rows], dtype=np.int8)
+    labels = np.array([int(row["label_presence_plus"]) for row in rows], dtype=np.int8)
+    weights = np.array([float(row["sample_weight"]) for row in rows], dtype=np.float32)
+    candidate_weight = float(np.sum(weights[labels == 1]))
+    total_weight = float(np.sum(weights))
+    return {
+        "sample_count": len(rows),
+        "predicted_positive_rate": float(np.mean(predictions == 1)),
+        "score_min": float(np.min(scores)),
+        "score_median": float(np.median(scores)),
+        "score_max": float(np.max(scores)),
+        "candidate_effective_weight_fraction": _safe_div(candidate_weight, total_weight),
+    }
+
+
+def _folds_above_permutation(
+    fold_metrics: list[dict[str, Any]],
+    model_type: str,
+) -> int:
+    by_fold: dict[int, dict[bool, float | None]] = {}
+    for row in fold_metrics:
+        if row["model_type"] != model_type:
+            continue
+        by_fold.setdefault(int(row["fold_index"]), {})[bool(row["permutation"])] = _as_float(
+            row["metrics"].get("balanced_accuracy")
+        )
+    count = 0
+    for values in by_fold.values():
+        real = values.get(False)
+        permuted = values.get(True)
+        if real is not None and permuted is not None and real > permuted:
+            count += 1
+    return count
+
+
+def _best_non_degenerate_row(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    candidates = [
+        row
+        for row in rows
+        if not row["degenerate_prediction"]
+        and _as_float(row.get("real_minus_permutation_margin")) is not None
+    ]
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda row: float(row.get("real_minus_permutation_margin") or -1.0e9),
+    )
+
+
+def _remediation_no_go_reasons(
+    rows: list[dict[str, Any]],
+    baseline_config: BaselineConfig,
+) -> list[str]:
+    reasons: list[str] = []
+    non_degenerate = [row for row in rows if not row["degenerate_prediction"]]
+    if not non_degenerate:
+        reasons.append("all_scenarios_degenerate")
+    if not any(
+        _as_float(row.get("real_minus_permutation_margin")) is not None
+        and float(row["real_minus_permutation_margin"]) > 0.0
+        for row in non_degenerate
+    ):
+        reasons.append("all_non_degenerate_not_above_permutation")
+    if not _has_class_balanced_success(
+        rows,
+        baseline_config.min_permutation_balanced_accuracy_margin,
+    ):
+        reasons.append("class_balanced_margin_not_met")
+    if any(row["degenerate_prediction"] for row in rows):
+        reasons.append("one_or_more_degenerate_predictions")
+    if any(bool(row["leakage_suspected"]) for row in rows):
+        reasons.append("leakage_warning")
+    return reasons
+
+
+def _has_class_balanced_success(rows: list[dict[str, Any]], required_margin: float) -> bool:
+    for row in rows:
+        margin = _as_float(row.get("real_minus_permutation_margin"))
+        if (
+            row["weight_policy"]
+            in {"class_balanced_confidence", "capped_class_balanced_confidence"}
+            and not row["degenerate_prediction"]
+            and margin is not None
+            and margin >= required_margin
+            and int(row.get("folds_above_permutation") or 0) >= 2
+        ):
+            return True
+    return False
+
+
+def _only_confidence_only_effective(rows: list[dict[str, Any]], required_margin: float) -> bool:
+    confidence_success = any(
+        row["weight_policy"] == "confidence_only"
+        and not row["degenerate_prediction"]
+        and (_as_float(row.get("real_minus_permutation_margin")) or -1.0) >= required_margin
+        for row in rows
+    )
+    balanced_success = _has_class_balanced_success(rows, required_margin)
+    return confidence_success and not balanced_success
+
+
+def _write_summary_csv(rows: list[dict[str, Any]], output_csv: Path) -> None:
+    fieldnames = [
+        "scenario_name",
+        "model_type",
+        "feature_set",
+        "weight_policy",
+        "disagreement_strategy",
+        "max_depth_match_error_ft",
+        "selected_samples",
+        "candidate_count",
+        "non_candidate_count",
+        "candidate_effective_weight_fraction",
+        "balanced_accuracy",
+        "weighted_accuracy",
+        "precision",
+        "recall",
+        "f1",
+        "predicted_positive_rate",
+        "score_min",
+        "score_median",
+        "score_max",
+        "permutation_balanced_accuracy",
+        "real_minus_permutation_margin",
+        "passes_configured_margin",
+        "folds_above_permutation",
+        "degenerate_prediction",
+        "leakage_suspected",
+        "permutation_error_present",
+        "scenario_error_count",
+    ]
+    with output_csv.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def _write_prediction_csv(rows: list[dict[str, Any]], output_csv: Path) -> None:
