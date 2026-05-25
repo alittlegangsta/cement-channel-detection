@@ -2072,6 +2072,13 @@ and non-candidate effective weights are auditable. The default remediation
 policy must keep candidate effective weight fraction below the configured cap
 unless an explicit configuration overrides it.
 
+Side/depth feature remediation may append only normalized features derived from
+existing MVP-4B sample table fields. It must not read raw XSI waveform and must
+not use label fields to construct features. The allowed additions are
+per-depth side z-score, per-depth side rank, depth-median residual, per-side
+rolling depth z-score, `log_late_over_early_ratio`, and
+`normalized_late_minus_early`.
+
 Required sample-weight outputs:
 
 ```text

@@ -170,3 +170,23 @@ The default candidate effective weight fraction should not exceed `0.60`
 without an explicit configuration change. If class-balanced weights cannot be
 constructed because either high-confidence candidate or non-candidate samples
 are absent, the remediation remains `no_go`.
+
+## MVP-4B-R Enhanced Feature Diagnostics
+
+Enhanced remediation features are descriptive transformations of existing MVP-4B
+basic features. They may be evaluated in controlled ablations but are not
+formal feature engineering approval for MVP-4C.
+
+Required checks:
+
+```text
+raw XSI waveform is not read
+labels are not used to construct features
+all enhanced transformed features are finite
+original transformed features are preserved
+side/depth normalization metadata is written
+receiver-level side-normalized metrics are skipped and reported if unavailable
+```
+
+If enhanced transformed features produce substantial non-finite values, the
+remediation remains `no_go` and must return to feature preprocessing review.

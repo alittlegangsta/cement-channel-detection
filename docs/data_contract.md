@@ -1203,6 +1203,13 @@ Stage 2 simple baseline 输入：
 /home/xiaoj/cement-channel-data/interim/baseline_sample_table_v001.npz
 ```
 
+MVP-4B-R remediation may also produce:
+
+```text
+/home/xiaoj/cement-channel-data/interim/baseline_sample_table_reweighted_v001.npz
+/home/xiaoj/cement-channel-data/interim/baseline_sample_table_enhanced_v001.npz
+```
+
 该 NPZ 必须至少包含：
 
 ```text
@@ -1221,6 +1228,38 @@ no_final_labels
 no_stc
 no_apes
 ```
+
+The reweighted remediation table must preserve the original sample table fields
+and add auditable weight policy arrays:
+
+```text
+sample_weight_original
+sample_weight_confidence_only
+sample_weight_class_balanced_confidence
+sample_weight_capped_class_balanced_confidence
+sample_weight_unweighted
+sample_weight_policy_names
+sample_weight_default_policy
+```
+
+The enhanced remediation table must preserve the original transformed features
+and add side/depth normalized features derived only from existing `features`,
+`depth`, and `side_index`:
+
+```text
+transformed_features_original
+transformed_feature_names_original
+base_transformed_feature_count
+enhanced_features_added
+enhanced_feature_names_added
+feature_normalization_version
+feature_normalization_metadata_json
+```
+
+Allowed MVP-4B-R enhanced features are limited to per-depth side z-score,
+per-depth side rank, depth-median residual, per-side rolling depth z-score,
+`log_late_over_early_ratio`, and `normalized_late_minus_early`. These features
+must not use label fields and must not read raw XSI waveform.
 
 Stage 2 输出仅限报告、CSV 预测审计表和 review figures：
 
