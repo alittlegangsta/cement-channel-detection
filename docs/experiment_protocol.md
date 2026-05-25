@@ -1030,6 +1030,39 @@ label_threshold_sensitivity_v001.csv
 
 ## 9. 相关性验证协议
 
+### 9.0 MVP-4A sanity-check scope
+
+MVP-4A 目标是验证 XSI waveform 的基础信号响应与
+`cast_weak_label_candidates_v001` 是否存在可解释统计关系。该阶段只允许：
+
+```text
+chunked XSI waveform reading
+RMS / peak_abs / mean_abs / early_energy / late_energy sanity features
+confidence-weighted statistical comparison
+review figures
+MVP-4A gate report
+```
+
+该阶段明确不允许：
+
+```text
+STC
+APES
+model training
+train/test split
+final labels
+把 weak-label candidate 称为 ground truth
+进入 MVP-4B 或 MVP-5
+```
+
+RelBearing 策略必须保持：
+
+```text
+primary_label = plus
+audit_label = minus_ablation
+single_sign_final_label_approved = false
+```
+
 ### 9.1 必做实验
 
 训练模型前必须完成：

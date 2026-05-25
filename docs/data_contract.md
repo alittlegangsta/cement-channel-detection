@@ -1127,6 +1127,65 @@ label_threshold_sensitivity_v001.json
 label_threshold_sensitivity_v001.csv
 ```
 
+### 7.7.2 MVP-4A XSI-CAST weak-label correlation sanity artifacts
+
+MVP-4A 只验证 XSI basic signal summaries 与 CAST weak-label candidates 是否存在
+统计相关性。该阶段不是训练、不是正式特征工程、也不是 final label approval。
+
+配置文件：
+
+```text
+configs/mvp4a_xsi_cast_correlation.example.yaml
+```
+
+必须保持：
+
+```text
+label_source = cast_weak_label_candidates_v001
+primary_label = plus
+audit_label = minus_ablation
+use_label_confidence = true
+no_model_training = true
+no_final_labels = true
+```
+
+MVP-4A label sample index 推荐以 NPZ 保存，shape 为 `[depth, side]`，至少包含：
+
+```text
+xsi_depth
+xsi_depth_index
+xsi_side_azimuth_deg
+label_presence_plus
+label_severity_plus
+label_confidence_plus
+label_presence_minus_audit
+plus_minus_disagreement
+orientation_confidence
+valid_for_azimuthal_validation
+valid_for_non_azimuthal_summary
+no_final_labels
+metadata_json
+```
+
+MVP-4A XSI basic feature NPZ 不得保存完整 waveform。推荐保存：
+
+```text
+xsi_basic_features            # [depth, receiver, side, feature]
+xsi_basic_features_by_side    # [depth, side, feature]
+feature_names
+xsi_depth
+receiver_index
+side_labels
+xsi_side_azimuth_deg
+no_stc
+no_apes
+no_model_training
+```
+
+允许的 basic features 仅限 RMS、peak absolute amplitude、mean absolute amplitude、
+early/late window energy 和派生 late/early ratio。STC、APES、训练 split、模型预测和
+final labels 均不得出现在 MVP-4A 产物中。
+
 MVP-3 候选规则不得只依赖固定阈值，必须包含自适应 `Zc_base` 和
 `relative_drop`。若 `zc_min_limit` 未经人工确认，报告必须标记为
 `requires_human_threshold_confirmation`。
