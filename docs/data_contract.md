@@ -1261,6 +1261,47 @@ per-depth side rank, depth-median residual, per-side rolling depth z-score,
 `log_late_over_early_ratio`, and `normalized_late_minus_early`. These features
 must not use label fields and must not read raw XSI waveform.
 
+MVP-4B-R2 receiver-derived remediation may additionally produce:
+
+```text
+/home/xiaoj/cement-channel-data/interim/baseline_sample_table_receiver_enhanced_v001.npz
+```
+
+This table must preserve the enhanced sample table fields and append
+receiver-derived transformed features derived only from
+`xsi_basic_features_v001.npz`:
+
+```text
+receiver_features_added
+receiver_feature_names_added
+receiver_transformed_features_added
+receiver_transformed_feature_names_added
+receiver_feature_version
+receiver_feature_metadata_json
+```
+
+Allowed receiver-derived families are:
+
+```text
+receiver_mean_per_side_feature
+receiver_std_per_side_feature
+receiver_slope_per_side_feature
+near_receiver_mean          # R1-R4
+mid_receiver_mean           # R5-R9
+far_receiver_mean           # R10-R13
+far_minus_near
+far_over_near
+receiver_peak_position
+receiver_energy_decay_slope
+receiver_consistency_cv
+per_side_receiver_normalized
+```
+
+These features must use XSI basic feature arrays with shape
+`[depth, receiver, side, feature]`; must not read raw waveform; must not use
+weak-label fields to construct features; and must keep `no_final_labels`,
+`no_stc`, and `no_apes` true.
+
 Stage 2 输出仅限报告、CSV 预测审计表和 review figures：
 
 ```text
