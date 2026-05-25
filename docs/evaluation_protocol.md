@@ -231,3 +231,64 @@ no STC / APES / deep learning / MVP-4C implementation already performed
 
 Failure of these checks keeps the decision at `no_go` and recommends returning
 to label sampling or feature design instead of escalating model complexity.
+
+## MVP-4B-R2 Receiver Feature Diagnostics
+
+Receiver-derived remediation features may be built only from
+`xsi_basic_features_v001.npz` and existing MVP-4B sample tables. The diagnostic
+goal is to determine whether the 13-receiver XSI array dimension carries
+stronger weak-label sanity signal than side-level aggregates.
+
+Required checks:
+
+```text
+raw XSI waveform is not read
+labels are not used to construct receiver-derived features
+all receiver-derived transformed features are finite
+feature ranges and finite ratios are reported
+top standardized differences are reported as diagnostics only
+no final labels
+no STC / APES / deep learning / MVP-4C implementation
+```
+
+Receiver feature ablations must still use depth-block splits, capped
+class-balanced confidence weighting, and permutation checks. If the best
+non-degenerate receiver-derived result fails the configured permutation margin,
+the decision remains `no_go`.
+
+Required receiver ablation comparisons:
+
+```text
+side-level enhanced features only
+receiver-derived features only
+side-level + receiver-derived features
+receiver-derived late_over_early subset
+receiver-derived far/near subset
+include plus/minus disagreement
+exclude plus/minus disagreement
+```
+
+The receiver ablation report may suggest a gate decision, but it must not enter
+MVP-4C by itself.
+
+## MVP-4B-R2 Receiver Feature Gate
+
+The receiver feature gate consumes the receiver-derived feature report,
+receiver ablation report, and prior MVP-4B-R gate report. It must evaluate the
+best receiver-derived scenario separately from side-level-only scenarios.
+
+Required gate conditions:
+
+```text
+receiver-derived transformed feature finite ratio = 1.0
+label fields were not used to construct receiver-derived features
+best receiver-derived scenario is class-balanced and non-degenerate
+best receiver-derived real - permutation margin >= 0.03
+best receiver-derived result is supported by at least two depth-block folds
+no leakage suspicion
+no final labels
+no STC / APES / deep learning / MVP-4C implementation
+```
+
+If these checks fail, the recommended next step is label refinement or
+controlled time-frequency feature sanity, not model escalation.

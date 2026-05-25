@@ -2109,3 +2109,40 @@ allow only consideration of MVP-4C when a class-balanced, non-degenerate result
 exceeds the permutation baseline by the gate margin and is supported by more
 than one depth-block fold. A `no_go` decision keeps the project in label and
 feature design review.
+
+## 25. MVP-4B-R2 Receiver Feature Remediation
+
+MVP-4B-R2 is allowed only after MVP-4B-R remains `no_go` because shallow
+side-level features are too weak. It may build receiver-derived features from
+the existing `xsi_basic_features_v001.npz` array with shape
+`[depth, receiver, side, feature]` and merge them into the enhanced sample
+table.
+
+Required constraints:
+
+```text
+do not read raw XSI waveform
+do not use labels to construct features
+do not enter MVP-4C
+do not run STC or APES
+do not train deep learning models
+do not generate final labels
+do not call CAST weak-label candidates ground truth
+```
+
+Required receiver feature families include receiver mean/std/slope per side,
+near/mid/far receiver means, far-minus-near, far-over-near, receiver peak
+position, receiver energy decay slope, receiver consistency coefficient of
+variation, and per-side receiver-normalized variants.
+
+Receiver feature ablations must keep capped class-balanced confidence weighting,
+depth-block splits, and permutation checks. A receiver feature gate may only
+allow MVP-4C consideration when a class-balanced, non-degenerate,
+permutation-safe result exceeds the configured margin. Otherwise the project
+remains `no_go` and should return to label refinement or controlled
+time-frequency feature sanity.
+
+The receiver feature gate must use the best receiver-derived result, not a
+side-level-only result. If receiver-derived features do not exceed the
+permutation baseline by the configured margin, the gate remains `no_go` even
+when side-level features are the overall best ablation.
