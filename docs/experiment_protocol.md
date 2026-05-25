@@ -1234,6 +1234,11 @@ Stage 2 报告中的 accuracy、F1、precision、recall、balanced accuracy 和 
 summary 只表示 sanity agreement with weak-label candidates，不得称为 ground truth
 performance。
 
+depth-block group split 必须把相邻深度样本作为同一组处理。validation fold 应由完整
+depth blocks 组成，train fold 不得包含同一 block；配置 `min_gap_ft` 时，还必须从
+train fold 中剔除 validation 深度范围附近的 gap 样本。每折都必须报告 candidate 与
+non-candidate 数量，若任一类不足，Stage 2 应 warning 或停止。
+
 ---
 
 ### 9.5 深度错位检验
