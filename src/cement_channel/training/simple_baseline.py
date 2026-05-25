@@ -1310,6 +1310,33 @@ def _feature_matrix_for_remediation(
     transformed_names = np.asarray(arrays["transformed_feature_names"]).astype(str).tolist()
     if feature_set == "enhanced_normalized":
         return transformed, transformed_names
+    if feature_set in {"side_level_enhanced", "side_level_enhanced_only"}:
+        return _side_level_transformed_features(arrays, transformed, transformed_names)
+    if feature_set == "receiver_derived_only":
+        return _receiver_transformed_features(arrays)
+    if feature_set == "side_plus_receiver":
+        return transformed, transformed_names
+    if feature_set == "receiver_late_over_early_only":
+        receiver_features, receiver_names = _receiver_transformed_features(arrays)
+        indices = [
+            index
+            for index, name in enumerate(receiver_names)
+            if "late_over_early_ratio" in name
+        ]
+        if not indices:
+            raise KeyError("No receiver-derived late_over_early_ratio features found.")
+        return receiver_features[:, indices], [receiver_names[index] for index in indices]
+    if feature_set == "receiver_far_near_only":
+        receiver_features, receiver_names = _receiver_transformed_features(arrays)
+        tokens = ("far_", "near_", "far_minus_near", "far_over_near")
+        indices = [
+            index
+            for index, name in enumerate(receiver_names)
+            if any(token in name for token in tokens)
+        ]
+        if not indices:
+            raise KeyError("No receiver-derived far/near features found.")
+        return receiver_features[:, indices], [receiver_names[index] for index in indices]
     if feature_set == "original_transformed":
         if "transformed_features_original" in arrays:
             names = np.asarray(arrays["transformed_feature_names_original"]).astype(str).tolist()
@@ -1326,6 +1353,33 @@ def _feature_matrix_for_remediation(
         indices = _required_feature_indices(raw_names, names)
         return raw_features[:, indices], names
     raise ValueError(f"Unsupported remediation feature_set: {feature_set}")
+
+
+def _side_level_transformed_features(
+    arrays: dict[str, np.ndarray],
+    transformed: np.ndarray,
+    transformed_names: list[str],
+) -> tuple[np.ndarray, list[str]]:
+    if "receiver_transformed_features_added" not in arrays:
+        return transformed, transformed_names
+    receiver_count = np.asarray(arrays["receiver_transformed_features_added"]).shape[1]
+    if receiver_count <= 0 or receiver_count >= transformed.shape[1]:
+        raise ValueError("receiver_transformed_features_added has incompatible width.")
+    side_count = transformed.shape[1] - receiver_count
+    return transformed[:, :side_count], transformed_names[:side_count]
+
+
+def _receiver_transformed_features(
+    arrays: dict[str, np.ndarray],
+) -> tuple[np.ndarray, list[str]]:
+    if "receiver_transformed_features_added" not in arrays:
+        raise KeyError("Sample table is missing receiver_transformed_features_added.")
+    if "receiver_transformed_feature_names_added" not in arrays:
+        raise KeyError("Sample table is missing receiver_transformed_feature_names_added.")
+    return (
+        np.asarray(arrays["receiver_transformed_features_added"], dtype=np.float32),
+        np.asarray(arrays["receiver_transformed_feature_names_added"]).astype(str).tolist(),
+    )
 
 
 def _weights_for_remediation(

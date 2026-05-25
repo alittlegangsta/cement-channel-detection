@@ -255,3 +255,18 @@ Receiver feature ablations must still use depth-block splits, capped
 class-balanced confidence weighting, and permutation checks. If the best
 non-degenerate receiver-derived result fails the configured permutation margin,
 the decision remains `no_go`.
+
+Required receiver ablation comparisons:
+
+```text
+side-level enhanced features only
+receiver-derived features only
+side-level + receiver-derived features
+receiver-derived late_over_early subset
+receiver-derived far/near subset
+include plus/minus disagreement
+exclude plus/minus disagreement
+```
+
+The receiver ablation report may suggest a gate decision, but it must not enter
+MVP-4C by itself.
