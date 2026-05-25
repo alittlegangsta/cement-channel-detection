@@ -1240,6 +1240,25 @@ no model training in Stage 1
 MVP-4B Stage 1 的 `go` 或 `conditional_go` 最多只允许进入 simple baseline sanity
 model；不得直接进入 MVP-5、深度学习、STC 或 APES。
 
+MVP-4B Stage 1 gate report 必须汇总：
+
+```text
+baseline_sample_table_report_v001.json
+feature_preprocessing_diagnostics_v001.json
+mvp4a_gate_report.json
+```
+
+输出：
+
+```text
+/home/xiaoj/cement-channel-data/reports/mvp4b_stage1_gate_report.md
+/home/xiaoj/cement-channel-data/reports/mvp4b_stage1_gate_report.json
+```
+
+gate decision 可为 `go`、`conditional_go` 或 `no_go`。`go` 或 `conditional_go`
+只表示允许进入 MVP-4B Stage 2 simple baseline sanity model；仍不得声称模型性能，
+不得生成 final labels，不得进入 MVP-4C、MVP-5、STC、APES 或深度学习。
+
 ---
 
 ### 9.5 深度错位检验
