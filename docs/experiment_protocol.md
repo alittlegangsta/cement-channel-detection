@@ -1141,7 +1141,57 @@ No-Go 条件：
 
 ---
 
-### 9.4 深度错位检验
+### 9.4 MVP-4A gate
+
+MVP-4A gate 只判断 basic XSI signal summaries 与
+`cast_weak_label_candidates_v001` 是否有足够 sanity correlation 进入 MVP-4B。它不允许
+训练模型、STC/APES、正式特征工程或 final labels。
+
+必须输入：
+
+```text
+xsi_label_samples_report_v001.json
+xsi_basic_features_report_v001.json
+xsi_cast_correlation_report_v001.json
+mvp4a_review_v001/mvp4a_review_summary_v001.json
+```
+
+允许进入 MVP-4B 的最低条件：
+
+```text
+XSI basic features extracted successfully
+label sample index valid
+high-confidence subset exists
+candidate vs non-candidate shows interpretable signal separation
+low-confidence policy respected
+no model training was performed
+no final labels were claimed
+```
+
+No-Go 条件：
+
+```text
+XSI features are mostly non-finite
+label sample mapping invalid
+high-confidence subset too small
+no interpretable separation
+any report indicates final labels
+any report indicates model training
+```
+
+输出：
+
+```text
+/home/xiaoj/cement-channel-data/reports/mvp4a_gate_report.md
+/home/xiaoj/cement-channel-data/reports/mvp4a_gate_report.json
+```
+
+MVP-4A `go` 或 `conditional_go` 最多只允许进入 MVP-4B feature engineering sanity
+work；不得直接进入 MVP-5 baseline modeling 或深度模型。
+
+---
+
+### 9.5 深度错位检验
 
 目标：
 
@@ -1170,7 +1220,7 @@ No-Go 条件：
 
 ---
 
-### 9.5 负对照实验
+### 9.6 负对照实验
 
 负对照输入包括：
 
@@ -1197,7 +1247,7 @@ No-Go 条件：
 
 ---
 
-### 9.6 正对照实验
+### 9.7 正对照实验
 
 正对照可以使用合成或半合成异常：
 
