@@ -1189,6 +1189,51 @@ any report indicates model training
 MVP-4A `go` 或 `conditional_go` 最多只允许进入 MVP-4B feature engineering sanity
 work；不得直接进入 MVP-5 baseline modeling 或深度模型。
 
+### 9.4.1 MVP-4B simple baseline sanity model scope
+
+MVP-4B Stage 2 只允许运行 simple baseline sanity model，用于检查
+`baseline_sample_table_v001` 中的 XSI transformed features 是否能弱监督地区分
+`cast_weak_label_candidates_v001`。该阶段不是 production training，不得声称正式模型
+性能，不得生成 final labels。
+
+允许模型：
+
+```text
+logistic_regression
+linear_probe
+```
+
+必须使用：
+
+```text
+transformed_features
+high-confidence subset only
+valid_for_azimuthal_validation = true
+sample_weight
+depth_block_group_split
+plus primary labels
+minus audit comparison
+permutation label sanity check
+```
+
+禁止：
+
+```text
+random point split
+low-confidence azimuth labels as strong supervision
+deep learning
+STC
+APES
+large-scale hyperparameter search
+production model export
+final labels
+MVP-4C or MVP-5 before the Stage 2 gate
+```
+
+Stage 2 报告中的 accuracy、F1、precision、recall、balanced accuracy 和 calibration
+summary 只表示 sanity agreement with weak-label candidates，不得称为 ground truth
+performance。
+
 ---
 
 ### 9.5 深度错位检验

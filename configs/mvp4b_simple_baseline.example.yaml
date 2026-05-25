@@ -1,0 +1,61 @@
+schema_version: schema_v001
+config_version: mvp4b_simple_baseline_v001
+stage: MVP-4B
+task: simple_baseline_sanity_model
+
+input_sample_table: baseline_sample_table_v001
+label: label_presence_plus
+label_status: human_reviewed_candidate_v001
+primary_label: plus
+audit_label: minus_ablation
+no_final_labels: true
+
+model_type:
+  - logistic_regression
+  - linear_probe
+
+feature_set:
+  - transformed_features
+
+sample_filter:
+  high_confidence_only: true
+  valid_for_azimuthal_validation: true
+  exclude_plus_minus_disagreement: false
+  exclude_large_depth_match_error: true
+  min_samples_per_class: 20
+
+sample_weight:
+  use_sample_weight: true
+  source: sample_weight
+
+split:
+  method: depth_block_group_split
+  n_splits: 3
+  depth_block_size_ft: 250.0
+  min_gap_ft: 5.0
+  min_samples_per_class_per_fold: 10
+
+evaluation:
+  metrics:
+    - weighted_accuracy
+    - balanced_accuracy
+    - f1
+    - precision
+    - recall
+    - calibration_summary
+  permutation_check: true
+  permutation_seed: 202405
+  min_permutation_balanced_accuracy_margin: 0.02
+  suspicious_metric_threshold: 0.98
+  calibration_bins: 10
+
+optimizer:
+  max_iterations: 350
+  learning_rate: 0.1
+  l2_penalty: 0.0001
+
+allowed_scope: sanity_model_only
+no_deep_learning: true
+no_stc: true
+no_apes: true
+no_production_model: true

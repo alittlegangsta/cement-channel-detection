@@ -1186,6 +1186,56 @@ no_model_training
 early/late window energy 和派生 late/early ratio。STC、APES、训练 split、模型预测和
 final labels 均不得出现在 MVP-4A 产物中。
 
+### 7.7.3 MVP-4B baseline sample table and sanity model artifacts
+
+MVP-4B 只允许使用 `baseline_sample_table_v001` 做 weak-label sanity checks。该阶段
+不得生成 final labels，不得保存 production model 权重，不得进入 STC、APES 或深度学习。
+
+simple baseline 配置文件：
+
+```text
+configs/mvp4b_simple_baseline.example.yaml
+```
+
+Stage 2 simple baseline 输入：
+
+```text
+/home/xiaoj/cement-channel-data/interim/baseline_sample_table_v001.npz
+```
+
+该 NPZ 必须至少包含：
+
+```text
+depth
+side_index
+label_presence_plus
+label_presence_minus_audit
+label_confidence_plus
+plus_minus_disagreement
+valid_for_azimuthal_validation
+exclude_large_depth_match_error
+sample_weight
+transformed_features
+transformed_feature_names
+no_final_labels
+no_stc
+no_apes
+```
+
+Stage 2 输出仅限报告、CSV 预测审计表和 review figures：
+
+```text
+simple_baseline_report_v001.md
+simple_baseline_report_v001.json
+simple_baseline_v001.csv
+simple_baseline_review_v001/
+mvp4b_stage2_gate_report.md
+mvp4b_stage2_gate_report.json
+```
+
+这些输出中的指标只表示与 weak-label candidates 的 sanity agreement，不是正式模型性能，
+也不是 production readiness。
+
 MVP-3 候选规则不得只依赖固定阈值，必须包含自适应 `Zc_base` 和
 `relative_drop`。若 `zc_min_limit` 未经人工确认，报告必须标记为
 `requires_human_threshold_confirmation`。
