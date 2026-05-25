@@ -231,3 +231,27 @@ no STC / APES / deep learning / MVP-4C implementation already performed
 
 Failure of these checks keeps the decision at `no_go` and recommends returning
 to label sampling or feature design instead of escalating model complexity.
+
+## MVP-4B-R2 Receiver Feature Diagnostics
+
+Receiver-derived remediation features may be built only from
+`xsi_basic_features_v001.npz` and existing MVP-4B sample tables. The diagnostic
+goal is to determine whether the 13-receiver XSI array dimension carries
+stronger weak-label sanity signal than side-level aggregates.
+
+Required checks:
+
+```text
+raw XSI waveform is not read
+labels are not used to construct receiver-derived features
+all receiver-derived transformed features are finite
+feature ranges and finite ratios are reported
+top standardized differences are reported as diagnostics only
+no final labels
+no STC / APES / deep learning / MVP-4C implementation
+```
+
+Receiver feature ablations must still use depth-block splits, capped
+class-balanced confidence weighting, and permutation checks. If the best
+non-degenerate receiver-derived result fails the configured permutation margin,
+the decision remains `no_go`.
