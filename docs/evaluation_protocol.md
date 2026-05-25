@@ -270,3 +270,25 @@ exclude plus/minus disagreement
 
 The receiver ablation report may suggest a gate decision, but it must not enter
 MVP-4C by itself.
+
+## MVP-4B-R2 Receiver Feature Gate
+
+The receiver feature gate consumes the receiver-derived feature report,
+receiver ablation report, and prior MVP-4B-R gate report. It must evaluate the
+best receiver-derived scenario separately from side-level-only scenarios.
+
+Required gate conditions:
+
+```text
+receiver-derived transformed feature finite ratio = 1.0
+label fields were not used to construct receiver-derived features
+best receiver-derived scenario is class-balanced and non-degenerate
+best receiver-derived real - permutation margin >= 0.03
+best receiver-derived result is supported by at least two depth-block folds
+no leakage suspicion
+no final labels
+no STC / APES / deep learning / MVP-4C implementation
+```
+
+If these checks fail, the recommended next step is label refinement or
+controlled time-frequency feature sanity, not model escalation.

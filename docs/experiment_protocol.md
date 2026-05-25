@@ -2141,3 +2141,8 @@ allow MVP-4C consideration when a class-balanced, non-degenerate,
 permutation-safe result exceeds the configured margin. Otherwise the project
 remains `no_go` and should return to label refinement or controlled
 time-frequency feature sanity.
+
+The receiver feature gate must use the best receiver-derived result, not a
+side-level-only result. If receiver-derived features do not exceed the
+permutation baseline by the configured margin, the gate remains `no_go` even
+when side-level features are the overall best ablation.
