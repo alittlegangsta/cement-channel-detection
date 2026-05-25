@@ -1239,6 +1239,45 @@ depth blocks 组成，train fold 不得包含同一 block；配置 `min_gap_ft` 
 train fold 中剔除 validation 深度范围附近的 gap 样本。每折都必须报告 candidate 与
 non-candidate 数量，若任一类不足，Stage 2 应 warning 或停止。
 
+### 9.4.2 MVP-4B Stage 2 gate
+
+MVP-4B Stage 2 gate 只判断 simple baseline sanity model 是否足够支持进入
+MVP-4C advanced feature engineering。它不允许进入 MVP-5，不允许深度学习、STC、APES，
+也不允许 production model export。
+
+必须输入：
+
+```text
+simple_baseline_report_v001.json
+simple_baseline_review_v001/simple_baseline_review_summary_v001.json
+mvp4b_stage1_gate_report.json
+```
+
+允许进入 MVP-4C 的最低条件：
+
+```text
+baseline uses valid depth-block split
+high-confidence candidate/non-candidate subset is sufficient
+real weak-label sanity metrics exceed permutation-label baseline
+no leakage evidence
+feature coefficients are available for interpretation
+plus primary vs minus audit comparison is documented
+no final labels are claimed
+no production model is claimed
+no deep learning / STC / APES are used
+```
+
+No-Go 条件：
+
+```text
+permutation check matches or exceeds real weak-label sanity metrics
+depth-block split invalid
+suspiciously high performance suggests leakage
+low-confidence azimuth labels are used as strong supervision
+sample weights invalid
+any report enters deep learning, STC, APES, MVP-5, or production training
+```
+
 ---
 
 ### 9.5 深度错位检验

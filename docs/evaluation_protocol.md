@@ -88,3 +88,27 @@ any report claims final labels or a production model
 
 Passing this gate only permits MVP-4C advanced feature engineering. It does not
 permit MVP-5, deep learning, STC, APES, or final label claims.
+
+## MVP-4B Stage 2 Gate
+
+The MVP-4B Stage 2 gate consumes the simple baseline report, review summary, and
+Stage 1 gate report. A `go` or `conditional_go` decision only permits MVP-4C
+advanced feature engineering.
+
+Required gate evidence:
+
+```text
+valid depth-block split
+sufficient high-confidence candidate/non-candidate samples
+real weak-label metrics exceed permutation-label metrics
+no leakage suspicion
+interpretable coefficient summary exists
+plus primary vs minus audit comparison exists
+no final labels
+no production model
+no deep learning / STC / APES
+```
+
+The gate must be `no_go` when permutation labels match or outperform real
+weak-label candidates, when split validity fails, or when metrics are
+suspiciously high enough to require leakage review.
