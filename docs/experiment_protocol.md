@@ -2046,3 +2046,46 @@ EXP-7: first physics baseline on tiny sample
 一句话原则：
 
 > 任何实验都必须能回答：用了什么数据、什么配置、什么代码、什么标签、什么特征、得到什么结果、为什么可信、是否允许进入下一阶段。
+
+---
+
+## 24. MVP-4B-R Remediation Experiments
+
+MVP-4B-R is only a remediation sanity stage after a simple baseline `no_go`.
+It may rebuild sample weights, add side/depth normalized features derived from
+existing MVP-4B sample tables, and rerun controlled baseline ablations.
+
+Required constraints:
+
+```text
+do not enter MVP-4C
+do not run STC or APES
+do not train deep learning models
+do not generate final labels
+do not call CAST weak-label candidates ground truth
+do not bypass permutation sanity checks
+```
+
+Sample weighting remediation must preserve `label_confidence_plus` as a
+within-class reliability signal and add class-balanced policies so candidate
+and non-candidate effective weights are auditable. The default remediation
+policy must keep candidate effective weight fraction below the configured cap
+unless an explicit configuration overrides it.
+
+Required sample-weight outputs:
+
+```text
+confidence_only
+class_balanced_confidence
+capped_class_balanced_confidence
+unweighted
+count fraction
+candidate/non-candidate effective weight
+per-fold effective weight balance
+disagreement subset weight fraction
+```
+
+The remediation gate may change the decision only when a class-balanced,
+non-degenerate baseline beats the permutation sanity baseline by the configured
+margin across valid depth-block folds. Otherwise the result remains `no_go` and
+the next step is label or feature design review.

@@ -144,3 +144,29 @@ insufficient_high_confidence_signal
 ```
 
 Outputs are review artifacts only and do not change the Stage 2 no-go decision.
+
+## MVP-4B-R Sample Weight Remediation
+
+When no-go diagnostics show single-class prediction caused by effective class
+weight imbalance, the next evaluation step is sample-weight remediation rather
+than a more complex model. Remediation weights are still weak-label sanity
+weights and must not be interpreted as final-label confidence.
+
+Required policy checks:
+
+```text
+confidence_only retained as old-policy control
+class_balanced_confidence reported
+capped_class_balanced_confidence reported and used by default
+unweighted control reported
+candidate effective weight fraction capped by config
+low-confidence azimuthal samples have zero azimuthal weight
+large depth-match-error samples have zero azimuthal weight by default
+plus/minus disagreement samples are downweighted or explicitly excluded
+per-fold effective weight balance is reported
+```
+
+The default candidate effective weight fraction should not exceed `0.60`
+without an explicit configuration change. If class-balanced weights cannot be
+constructed because either high-confidence candidate or non-candidate samples
+are absent, the remediation remains `no_go`.
