@@ -112,3 +112,35 @@ no deep learning / STC / APES
 The gate must be `no_go` when permutation labels match or outperform real
 weak-label candidates, when split validity fails, or when metrics are
 suspiciously high enough to require leakage review.
+
+## MVP-4B No-Go Diagnostics
+
+When the simple baseline does not exceed the permutation-label sanity baseline,
+the next step is diagnosis, not more complex modeling. The diagnostics may
+inspect sample weights, fold distributions, prediction degeneracy, disagreement
+subsets, confidence thresholds, and feature effect sizes.
+
+The diagnostics must not:
+
+```text
+train deep learning models
+run STC or APES
+enter MVP-4C
+generate final labels
+call weak-label candidates ground truth
+claim production model performance
+```
+
+Recommended no-go reason classes:
+
+```text
+label_noise
+feature_weakness
+split_distribution_shift
+class_weight_failure
+sample_weight_failure
+depth_leakage_or_block_issue
+insufficient_high_confidence_signal
+```
+
+Outputs are review artifacts only and do not change the Stage 2 no-go decision.
