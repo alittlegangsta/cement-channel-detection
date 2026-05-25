@@ -1,0 +1,73 @@
+schema_version: schema_v001
+config_version: mvp4a_xsi_cast_correlation_v001
+stage: MVP-4A
+task: xsi_cast_weak_label_correlation_sanity
+
+label_source: cast_weak_label_candidates_v001
+primary_label: plus
+audit_label: minus_ablation
+use_label_confidence: true
+min_label_confidence_for_azimuthal_validation: 0.5
+allow_low_confidence_for_non_azimuthal_summary: true
+
+candidate_parameters:
+  alpha: 0.35
+  zc_min_limit: 2.5
+  severity_thresholds: [0.30, 0.45, 0.60]
+  status: human_reviewed_candidate_v001
+  no_final_labels: true
+
+relbearing_policy:
+  primary: plus
+  primary_status: human_specification_approved
+  audit: minus_ablation
+  minus_usage: audit_only
+  single_sign_final_label_approved: false
+
+xsi_feature_set:
+  - rms_energy
+  - peak_abs
+  - mean_abs
+  - early_energy
+  - late_energy
+
+feature_windows:
+  early_time_fraction: [0.0, 0.35]
+  late_time_fraction: [0.35, 1.0]
+  include_late_over_early_ratio: true
+
+receiver_aggregation:
+  method: mean_or_median
+  reference_receiver_index: 7
+
+side_mapping:
+  side_a_offset_deg: 0.0
+  side_order: clockwise
+  side_labels: [A, B, C, D, E, F, G, H]
+
+sampler:
+  cast_azimuth_count: 180
+  xsi_side_count: 8
+  depth_match_method: nearest
+  max_depth_mismatch: null
+  noncandidate_azimuthal_validation_requires_label_confidence: false
+
+feature_extraction:
+  chunk_depth_samples: 32
+  max_time_samples: 1024
+  output_receiver_level: true
+  output_side_aggregated: true
+
+correlation:
+  high_confidence_min_samples_per_class: 20
+  min_interpretable_abs_effect_size: 0.05
+  min_interpretable_weighted_difference_fraction: 0.01
+
+review_figures:
+  max_depth_pixels: 1200
+  max_distribution_samples: 20000
+
+no_model_training: true
+no_stc: true
+no_apes: true
+no_final_labels: true

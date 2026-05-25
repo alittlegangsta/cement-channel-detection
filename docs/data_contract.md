@@ -410,6 +410,32 @@ shape：
 [side]
 ```
 
+MVP-2C 人工确认后的当前项目约定：
+
+```text
+side_a_aligned_with_cast_0deg = true
+side_a_offset_deg = 0.0
+side_a_offset_status = manually_confirmed
+xsi_side_order = clockwise
+xsi_side_order_status = manually_confirmed
+cast_azimuth_direction = normal
+cast_azimuth_values = 0,2,4,...,358
+cast_azimuth_direction_status = manually_confirmed
+```
+
+XSI 工具几何必须记录在配置或 metadata 中。当前人工确认几何为：
+
+```text
+receiver_count = 13
+reference_receiver_index = 7
+receiver_spacing_ft = 0.5
+source_to_receiver1_ft = 1.0
+source_to_reference_receiver_ft = 4.0
+receiver_offsets_from_R7_ft:
+  R1=-3.0, R2=-2.5, R3=-2.0, R4=-1.5, R5=-1.0, R6=-0.5,
+  R7=0.0, R8=0.5, R9=1.0, R10=1.5, R11=2.0, R12=2.5, R13=3.0
+```
+
 ---
 
 ### 5.4 高边坐标归一化
@@ -422,12 +448,16 @@ shape：
 theta_aligned = (theta_raw + RelBearing) mod 360
 ```
 
-但最终符号必须通过双符号实验确认：
+但数据驱动符号仍必须通过双符号实验评估：
 
 ```text
 theta_aligned_plus  = (theta_raw + RelBearing) mod 360
 theta_aligned_minus = (theta_raw - RelBearing) mod 360
 ```
+
+在 Side A / CAST 0°、Side A-H 顺时针和 CAST 方位 normal 均已人工确认后，
+plus 是当前 specification-preferred primary convention；但数据驱动验证仍为
+`insufficient_evidence`，不得写成 `data_confirmed_plus` 或 `confirmed_plus`。
 
 必须在 metadata 中保存：
 
@@ -522,6 +552,7 @@ Side A 与 Side H 相邻，0° 与 360° 相邻。
 | `/axis/depth` | float32 | `[depth]` | 是 | 统一深度轴 |
 | `/axis/time_ms` | float32 | `[time]` | 是 | XSI 时间轴，单位 ms |
 | `/axis/receiver_index` | int16 | `[receiver]` | 是 | 接收器索引 |
+| `/axis/xsi_receiver_offset_ft` | float32 | `[receiver]` | 是 | 相对 R7 reference line 的接收器 offset |
 | `/axis/side_index` | int16 | `[side]` | 是 | XSI Side 索引 |
 | `/axis/xsi_side_azimuth_deg` | float32 | `[side]` | 是 | XSI Side 方位角 |
 | `/axis/cast_azimuth_deg` | float32 | `[cast_azimuth]` | 是 | CAST 方位角 |
@@ -567,6 +598,289 @@ orientation_uncertain = true
 | `/alignment/relbearing_sign_candidate_score_minus` | float32 | scalar 或 `[depth]` | 推荐 | -RelBearing 方案得分 |
 
 深度错位估计的单位必须与 `/axis/depth` 一致。
+
+#### 7.4.1 MVP-2 depth axis audit artifacts
+
+MVP-2 进入正式插值或标签前，必须先生成 depth-only 审计报告：
+
+```text
+/home/xiaoj/cement-channel-data/reports/depth_axis_audit_report.md
+/home/xiaoj/cement-channel-data/reports/depth_axis_audit_report.json
+```
+
+该报告只允许读取 `CAST.Depth`、`XSILMR{receiver}.Depth` 和 `Depth_inc`，
+不得读取完整 XSI waveform 或完整 `CAST.Zc`。报告至少记录：
+
+```text
+cast_depth length/min/max/monotonic/median_step/nan_count/duplicate_count
+xsi_depth per receiver length/min/max/monotonic/median_step/nan_count/duplicate_count
+pose_depth length/min/max/monotonic/median_step/nan_count/duplicate_count
+receiver-to-receiver depth consistency
+common overlap interval
+candidate canonical depth grid
+warnings/errors/no-go blockers
+```
+
+如果 depth unit 仍为 `unknown_to_verify`，MVP-2 可保留 `conditional_go`，
+但必须在报告 warning 中记录并等待人工复核。
+
+#### 7.4.2 MVP-2 canonical depth grid proposal artifacts
+
+Depth audit 通过或 `conditional_go` 后，必须生成受控验证用 canonical depth grid
+proposal：
+
+```text
+/home/xiaoj/cement-channel-data/reports/depth_grid_proposal.md
+/home/xiaoj/cement-channel-data/reports/depth_grid_proposal.json
+configs/alignment.depth_grid.example.yaml
+```
+
+该阶段只允许读取 `depth_axis_audit_report.json`，不得读取 MAT、waveform 或
+`CAST.Zc`。proposal 必须记录：
+
+```text
+common_overlap_min/max
+depth_start/depth_stop
+depth_step
+sample_count
+grid_order = increasing
+allow_extrapolation = false
+step selection rationale
+warnings/errors/no-go blockers
+```
+
+若不同来源的 median depth step 差异较大，可以继续输出保守 grid，但必须记录
+warning；若 `depth_start`、`depth_stop` 或 `depth_step` 无法明确计算，则为
+`no_go`，不得进入插值预览。
+
+#### 7.4.3 MVP-2 controlled depth-only reader artifacts
+
+Depth grid proposal 明确后，MVP-2 可生成 depth-only / pose-only 受控读取结果：
+
+```text
+/home/xiaoj/cement-channel-data/interim/depth_only_v001.npz
+/home/xiaoj/cement-channel-data/interim/depth_only_summary_v001.json
+```
+
+该文件只允许包含：
+
+```text
+cast_depth
+xsi_depth_by_receiver
+pose_depth
+inc_deg
+relbearing_deg
+```
+
+该阶段不得读取或保存 XSI waveform、完整 `CAST.Zc`、弱标签、特征或模型输入。
+summary JSON 必须记录 shape、dtype、finite ratio、范围、warnings/errors 和
+`not_performed`。
+
+#### 7.4.4 MVP-2 small-slice depth resampling preview artifacts
+
+Controlled depth-only reader 与 depth grid proposal 均可用后，可生成小片段插值预览：
+
+```text
+/home/xiaoj/cement-channel-data/interim/depth_resample_preview_v001.npz
+/home/xiaoj/cement-channel-data/reports/depth_resample_preview_report.md
+/home/xiaoj/cement-channel-data/reports/depth_resample_preview_report.json
+```
+
+该阶段只验证数据能否映射到 proposed canonical depth grid，不得保存正式
+aligned HDF5。允许内容包括：
+
+```text
+canonical_depth
+source index on grid for CAST / pose / XSI receiver depth
+pose Inc / RelBearing interpolation preview
+small-slice CAST.Zc interpolation preview, only when small-slice depth overlaps the grid
+small-slice XSI waveform interpolation preview, only when small-slice depth overlaps the grid
+valid masks and interpolation NaN / extrapolation statistics
+```
+
+默认禁止外推；若 small-slice 的 CAST / XSI 首段不覆盖 proposed grid，只能记录
+`skipped_no_common_overlap` warning，不得读取全量 waveform 或 full `CAST.Zc` 来补齐。
+
+#### 7.4.4b MVP-2 overlap-targeted small-slice artifacts
+
+若默认 `small_slice_v001.npz` 与 proposed canonical grid 没有共同覆盖，可在共同
+overlap 中部重新读取受控小片段：
+
+```text
+/home/xiaoj/cement-channel-data/interim/small_slice_overlap_v001.npz
+/home/xiaoj/cement-channel-data/interim/small_slice_overlap_summary_v001.json
+/home/xiaoj/cement-channel-data/interim/depth_resample_overlap_preview_v001.npz
+/home/xiaoj/cement-channel-data/reports/depth_resample_overlap_preview_report.md
+/home/xiaoj/cement-channel-data/reports/depth_resample_overlap_preview_report.json
+```
+
+默认窗口来自 `depth_grid_proposal.json` 的 common overlap 中点，窗口长度不得超过
+2.0 m，默认 `max_depth_samples` 和 `max_time_samples` 必须保持小片段规模。
+该流程可按 depth offset 读取 MAT 中的局部 `CAST.Zc` 与 XSI waveform，但不得读取
+full waveform 或 full `CAST.Zc`。
+
+若 overlap-targeted slice 仍不能形成 CAST / XSI / pose 共同覆盖，报告必须写入
+error 并停止 RelBearing 证据增强。
+
+#### 7.4.5 MVP-2 RelBearing angle utilities
+
+RelBearing 方位归一化必须先实现独立、可测试的角度工具，再进入符号验证：
+
+```text
+wrap_deg(theta) -> [0, 360)
+circular_distance_deg(theta_a, theta_b)
+circular_mean_deg(theta, weights)
+theta_aligned_plus  = (theta_raw + RelBearing) mod 360
+theta_aligned_minus = (theta_raw - RelBearing) mod 360
+theta_no_rotation   = theta_raw mod 360
+orientation_confidence from Inc
+orientation_uncertain low-inc mask
+```
+
+此阶段不得选择最终 plus/minus 符号，不得生成标签。若 Side A 的物理零度未确认，
+`xsi_side_azimuth_deg` 仍必须来自配置或显式候选，不得在正式 alignment 中硬编码。
+
+Overlap-targeted RelBearing validation 可额外输出：
+
+```text
+/home/xiaoj/cement-channel-data/reports/relbearing_sign_validation_overlap_report.md
+/home/xiaoj/cement-channel-data/reports/relbearing_sign_validation_overlap_report.json
+```
+
+即使 overlap-targeted preview 有 CAST/XSI 小片段证据，若 plus/minus 仍无法区分，
+decision 必须保持 `insufficient_evidence`，不得自动写入正式 alignment 配置。
+
+Halliburton RB / Relative Bearing 文档定义下，若 raw side azimuth 以 tool key 为
+`0°`，且 looking downhole 顺时针增加，则文档优先公式为：
+
+```text
+theta_aligned = (theta_raw + RelBearing) mod 360
+```
+
+MVP-2C 人工确认 Side A / CAST 0°、Side A-H 顺时针和 CAST 方位 normal 后，
+当前状态必须记录为：
+
+```text
+relbearing_sign_status: specification_preferred_plus_data_unresolved
+primary_convention: plus
+ablation_convention: minus
+data_driven_validation: insufficient_evidence
+single_sign_alignment_approved: false
+approved_downstream_mode: plus_primary_minus_ablation
+```
+
+该状态不等同于 `data_confirmed_plus` 或 `confirmed_plus`。plus 是基于文档与人工确认
+几何/方位约定的 specification-preferred primary convention，不是数据驱动确认结论。
+因此不得生成 single-sign production alignment。后续只能以 plus 为主候选、minus 为
+对照消融的 dual-sign / ablation 模式进入下一阶段。
+
+#### 7.4.6 MVP-2 orientation confidence artifacts
+
+RelBearing plus/minus 符号未确认时，仍可独立基于 `Inc` 生成高边方向稳定性
+mask。该阶段输入仅为受控 depth-only 输出：
+
+```text
+/home/xiaoj/cement-channel-data/interim/depth_only_v001.npz
+```
+
+输出：
+
+```text
+/home/xiaoj/cement-channel-data/interim/orientation_confidence_v001.npz
+/home/xiaoj/cement-channel-data/reports/orientation_confidence_report.md
+/home/xiaoj/cement-channel-data/reports/orientation_confidence_report.json
+```
+
+`orientation_confidence_v001.npz` 必须至少包含：
+
+```text
+pose_depth
+inc_deg
+orientation_confidence
+low_inc_mask
+stable_inc_mask
+orientation_uncertain
+```
+
+默认阈值：
+
+```text
+I_min_deg = 1.0
+I_stable_deg = 5.0
+Inc <= I_min_deg      -> orientation_confidence = 0
+Inc >= I_stable_deg   -> orientation_confidence = 1
+I_min < Inc < I_stable -> linear transition
+```
+
+报告必须记录 Inc min/max/mean、low-inclination 样本比例、stable-inclination
+样本比例、orientation confidence 分布、warnings/errors，并明确该 mask 与
+RelBearing plus/minus sign 无关。
+
+#### 7.4.7 MVP-2 gate report artifacts
+
+MVP-2 完成 depth audit、depth grid proposal、depth-only reader、overlap-targeted
+resampling、RelBearing validation 和 orientation confidence 后，必须生成：
+
+```text
+/home/xiaoj/cement-channel-data/reports/mvp2_gate_report.md
+/home/xiaoj/cement-channel-data/reports/mvp2_gate_report.json
+```
+
+若 depth axes valid、depth grid exists、depth-only reader works、overlap-targeted
+resampling works、orientation confidence exists，且 RelBearing 状态为
+`specification_preferred_plus_data_unresolved`，gate decision 必须为
+`conditional_go`。该 conditional go 只允许进入 MVP-3 的
+`plus_primary_minus_ablation` workflow，不允许 single-sign production alignment、
+直接生成最终弱标签、feature extraction 或 model training。若存在 blocking errors，
+decision 必须为 `no_go`。
+
+#### 7.4.8 MVP-2C RelBearing / side order / CAST direction manual calibration
+
+MVP-2 gate 为 `conditional_go` 且 RelBearing 仍为
+`specification_preferred_plus_data_unresolved` 时，可执行 MVP-2C 人工审查与多假设
+校准。该阶段应先从 `depth_only_v001.npz`、`orientation_confidence_v001.npz` 和
+depth grid overlap 中主动扫描多个高质量候选窗口，再对入选窗口按需读取局部
+small-slice。不得把单个 fallback window 当作有效证据；每个窗口仍必须保持
+small-slice 限制，不得读取完整 XSI waveform 或 full `CAST.Zc`。
+
+必须比较的假设空间：
+
+```text
+relbearing_sign = plus / minus
+xsi_side_order = clockwise              # manually_confirmed
+cast_azimuth_direction = normal         # manually_confirmed
+side_a_offset_deg = 0.0                 # manually_confirmed
+```
+
+输出：
+
+```text
+/home/xiaoj/cement-channel-data/reports/relbearing_calibration_report.md
+/home/xiaoj/cement-channel-data/reports/relbearing_calibration_report.json
+/home/xiaoj/cement-channel-data/reports/relbearing_candidate_windows.md
+/home/xiaoj/cement-channel-data/reports/relbearing_manual_review/
+```
+
+`relbearing_manual_review/` 可包含 CAST Zc raw / plus-minus / normal-reversed 对比图、
+XSI side energy raw / plus-minus / side-order 对比图、hypothesis score summary 和
+`review_summary_template.md`。图像和报告均为人工审查 artifact，不得提交到 Git。
+
+判定规则：
+
+```text
+至少 5 个有效窗口才允许 data-supported recommendation
+至少 70% 有效窗口支持同一候选
+best-vs-second score gap 必须超过阈值
+fallback_window_counted_as_evidence = false
+不满足时 final_recommendation = unresolved_keep_plus_primary_minus_ablation
+满足时也只能输出 recommendation，不得写成 confirmed
+single_sign_alignment_approved = false
+production_alignment_config_written = false
+```
+
+人工排除区间可通过 `no_eccentric_or_rb_unreliable_intervals` 提供，但必须与项目内部
+depth 单位一致。若排除区间使用 `ft` 而内部 depth 轴为 `m` 或 `unknown_to_verify`，
+不得直接混用；必须先转换单位或记录 TODO / warning。
 
 ---
 
@@ -719,6 +1033,233 @@ orientation_uncertain = true
 
 ---
 
+### 7.7.1 MVP-3 CAST weak-label candidate schema
+
+MVP-3 只生成 CAST weak-label candidates，不生成 final labels。当前候选版本为：
+
+```text
+label_version = cast_weak_v001
+```
+
+必须同时保存 plus primary 与 minus ablation 两套候选：
+
+```text
+label_source_plus = cast_weak_plus
+label_source_minus = cast_weak_minus_ablation
+convention_status = specification_preferred_plus_data_unresolved
+no_final_labels = true
+```
+
+候选数组推荐以 NPZ 保存，shape 为 `[depth, cast_azimuth]`，并至少包含：
+
+```text
+presence_plus
+severity_plus
+label_confidence_plus
+presence_minus_ablation
+severity_minus_ablation
+label_confidence_minus_ablation
+evidence_flags_plus
+evidence_flags_minus_ablation
+cast_azimuth_aligned_deg
+metadata_json
+```
+
+MVP-3R 诊断版候选必须额外保存 confidence 分量和 bad-data mask，便于解释低
+confidence 区间和白线/异常线：
+
+```text
+zc_strength_confidence_plus
+baseline_confidence_plus
+orientation_confidence_on_cast_depth_plus
+relbearing_valid_confidence_plus
+bad_data_confidence_plus
+final_label_confidence_plus
+bad_data_mask_plus
+relative_drop_outlier_plus
+isolated_extreme_outlier_plus
+zc_strength_confidence_minus_ablation
+baseline_confidence_minus_ablation
+orientation_confidence_on_cast_depth_minus_ablation
+relbearing_valid_confidence_minus_ablation
+bad_data_confidence_minus_ablation
+final_label_confidence_minus_ablation
+bad_data_mask_minus_ablation
+relative_drop_outlier_minus_ablation
+isolated_extreme_outlier_minus_ablation
+```
+
+`bad_data_mask_*` 至少包含 non-finite `Zc`、`Zc <= 0` 和
+`relative_drop > 0.95`。bad-data 单元必须保持 `presence = -1`、`severity = -1`
+或其它 invalid 表达，不得因为极端低 `Zc` 被提升为 severe candidate。
+
+MVP-3H 人工审查后允许记录一个 human-reviewed weak-label candidate 参数组，
+但该记录不是 final label approval，也不是进入 MVP-4 的许可：
+
+```text
+recommended_parameter_set.alpha = 0.35
+recommended_parameter_set.zc_min_limit = 2.5
+recommended_parameter_set.severity_thresholds = [0.30, 0.45, 0.60]
+recommended_parameter_set.status = human_reviewed_candidate_v001
+recommended_parameter_set.final_label = false
+recommended_parameter_set.preserve_plus_minus_ablation = true
+recommended_parameter_set.mvp4_allowed = false
+recommended_parameter_set.reason =
+  weak labels are human-reviewed candidates, but not final labels; MVP-4 requires separate approval
+```
+
+RelBearing label policy must also be preserved:
+
+```text
+relbearing_label_policy.primary = plus
+relbearing_label_policy.primary_status = human_specification_approved
+relbearing_label_policy.data_driven_validation = insufficient_evidence
+relbearing_label_policy.minus_ablation_retained = true
+relbearing_label_policy.minus_usage = audit_only
+relbearing_label_policy.single_sign_final_label_approved = false
+```
+
+阈值敏感性输出只属于 reports，不属于标签产物：
+
+```text
+label_threshold_sensitivity_v001.md
+label_threshold_sensitivity_v001.json
+label_threshold_sensitivity_v001.csv
+```
+
+### 7.7.2 MVP-4A XSI-CAST weak-label correlation sanity artifacts
+
+MVP-4A 只验证 XSI basic signal summaries 与 CAST weak-label candidates 是否存在
+统计相关性。该阶段不是训练、不是正式特征工程、也不是 final label approval。
+
+配置文件：
+
+```text
+configs/mvp4a_xsi_cast_correlation.example.yaml
+```
+
+必须保持：
+
+```text
+label_source = cast_weak_label_candidates_v001
+primary_label = plus
+audit_label = minus_ablation
+use_label_confidence = true
+no_model_training = true
+no_final_labels = true
+```
+
+MVP-4A label sample index 推荐以 NPZ 保存，shape 为 `[depth, side]`，至少包含：
+
+```text
+xsi_depth
+xsi_depth_index
+xsi_side_azimuth_deg
+label_presence_plus
+label_severity_plus
+label_confidence_plus
+label_presence_minus_audit
+plus_minus_disagreement
+orientation_confidence
+valid_for_azimuthal_validation
+valid_for_non_azimuthal_summary
+no_final_labels
+metadata_json
+```
+
+MVP-4A XSI basic feature NPZ 不得保存完整 waveform。推荐保存：
+
+```text
+xsi_basic_features            # [depth, receiver, side, feature]
+xsi_basic_features_by_side    # [depth, side, feature]
+feature_names
+xsi_depth
+receiver_index
+side_labels
+xsi_side_azimuth_deg
+no_stc
+no_apes
+no_model_training
+```
+
+允许的 basic features 仅限 RMS、peak absolute amplitude、mean absolute amplitude、
+early/late window energy 和派生 late/early ratio。STC、APES、训练 split、模型预测和
+final labels 均不得出现在 MVP-4A 产物中。
+
+### 7.7.3 MVP-4B baseline sample table artifacts
+
+MVP-4B Stage 1 只构建 baseline sample table 和 robust preprocessing 诊断，不训练
+模型，不进入 MVP-5，也不生成 final labels。
+
+配置文件：
+
+```text
+configs/mvp4b_sample_table.example.yaml
+```
+
+输入产物：
+
+```text
+/home/xiaoj/cement-channel-data/interim/xsi_label_samples_v001.npz
+/home/xiaoj/cement-channel-data/features/xsi_basic_features_v001.npz
+```
+
+baseline sample table 推荐以 NPZ 保存，版本为：
+
+```text
+sample_table_version = baseline_sample_table_v001
+```
+
+每行代表 one depth × one XSI side sample。必须至少包含：
+
+```text
+sample_id
+depth
+side_index
+side_azimuth_deg
+label_presence_plus
+label_severity_plus
+label_confidence_plus
+label_presence_minus_audit
+plus_minus_disagreement
+orientation_confidence
+valid_for_azimuthal_validation
+valid_for_non_azimuthal_summary
+depth_match_error
+sample_weight
+azimuthal_sample_weight
+audit_flag_plus_minus_disagreement
+exclude_nonfinite_feature
+exclude_large_depth_match_error
+feature_names
+features
+transformed_feature_names
+transformed_features
+no_model_training
+no_final_labels
+metadata_json
+```
+
+允许的 feature transforms 仅限：
+
+```text
+log1p
+winsorization / clip quantiles
+robust scaling
+optional per-depth normalization diagnostics
+optional per-side normalization diagnostics
+```
+
+`valid_for_azimuthal_validation=false` 的样本不得作为强方位监督样本；可用于
+non-azimuthal summary 或被排除。plus/minus disagreement 必须保留为 audit flag 或
+降权依据，不得丢弃 minus audit 信息。
+
+MVP-3 候选规则不得只依赖固定阈值，必须包含自适应 `Zc_base` 和
+`relative_drop`。若 `zc_min_limit` 未经人工确认，报告必须标记为
+`requires_human_threshold_confirmation`。
+
+---
+
 ### 7.8 `/objects`
 
 对象级标签用于描述空间连通窜槽对象。
@@ -868,7 +1409,14 @@ depth_alignment_confidence
 | `/metadata/slowness_unit` | string | 特征阶段 | 慢度单位 |
 | `/metadata/sampling_interval_us` | float | 是 | XSI 采样间隔 |
 | `/metadata/xsi_receiver_count` | int | 是 | 接收器数量 |
+| `/metadata/xsi_reference_receiver_index` | int | 是 | reference line 接收器索引，当前为 7 |
+| `/metadata/xsi_receiver_spacing_ft` | float | 是 | XSI 阵列接收器间隔，当前为 0.5 ft |
+| `/metadata/xsi_source_to_receiver1_ft` | float | 是 | 下单极声源到 R1 距离，当前为 1.0 ft |
+| `/metadata/xsi_source_to_reference_receiver_ft` | float | 是 | 下单极声源到 reference receiver 距离，当前为 4.0 ft |
 | `/metadata/xsi_side_count` | int | 是 | XSI Side 数量 |
+| `/metadata/xsi_side_order` | string | 是 | Side A-H 顺序，当前 `clockwise` |
+| `/metadata/xsi_side_a_offset_deg` | float | 是 | Side A 相对 CAST 0° offset，当前 0.0 |
+| `/metadata/cast_azimuth_direction` | string | 是 | CAST 方位轴方向，当前 `normal` |
 | `/metadata/cast_azimuth_count` | int | 是 | CAST 方位数量 |
 | `/metadata/time_sample_count` | int | 是 | 时间采样点数量 |
 | `/metadata/relbearing_sign_selected` | string | 是 | RelBearing 符号 |

@@ -656,6 +656,25 @@ QC 输出无法与深度和方位对齐
 估计局部 depth lag
 ```
 
+MVP-2 的第一步必须是 depth axis audit。该 audit 只允许读取
+`CAST.Depth`、`XSILMR{receiver}.Depth` 和 `Depth_inc`，输出：
+
+```text
+depth_axis_audit_report.md
+depth_axis_audit_report.json
+```
+
+Depth audit Go 条件：
+
+```text
+CAST / XSI / pose 三套 depth 轴存在共同 overlap
+depth 基本递增
+无严重 NaN / Inf
+XSI receiver depth 轴大体一致
+```
+
+若只有 depth unit 未确认，可为 `conditional_go`，但必须记录 warning。
+
 必须输出：
 
 ```text
@@ -675,10 +694,145 @@ no rotation
 random rotation
 ```
 
+MVP-2 RelBearing sign validation 必须输出：
+
+```text
+relbearing_sign_validation_report.md
+relbearing_sign_validation_report.json
+configs/alignment.relbearing.example.yaml
+```
+
+若 small-slice 中没有可用的 CAST/XSI 共同方位证据，或 plus/minus 与
+no-rotation/random-rotation 无法区分，validation decision 必须为
+`insufficient_evidence`，不得硬选符号，不得进入正式 alignment 或 MVP-3，除非人工确认
+或后续明确批准 dual-sign / ablation 协议。
+
+若初始 small-slice 与 proposed depth grid 没有共同覆盖，可执行 Stage 6b：
+overlap-targeted small-slice + RelBearing evidence augmentation。该阶段只能在
+`depth_grid_proposal.json` 的共同 overlap 内读取不超过小片段规模的数据，默认窗口
+不超过 2.0 m，并输出：
+
+```text
+small_slice_overlap_v001.npz
+small_slice_overlap_summary_v001.json
+depth_resample_overlap_preview_v001.npz
+depth_resample_overlap_preview_report.md/json
+relbearing_sign_validation_overlap_report.md/json
+```
+
+Stage 6b 仍不得选择最终 RelBearing sign；如果 plus/minus 仍无法区分，必须继续
+`insufficient_evidence` 并要求人工确认或 dual-sign / ablation。
+
+人工文档确认信息可作为 MVP-2 gate 的条件依据，但不能替代数据验证。Halliburton
+RB / Relative Bearing 文档通常表示 tool key / tool reference 相对于 borehole
+high side 的顺时针角度，looking downhole 测量。因此在 raw side azimuth 以
+tool key 为 `0°`、且 looking-downhole 顺时针增加的假设下，文档优先公式为：
+
+```text
+theta_aligned = (theta_raw + RelBearing) mod 360
+```
+
+在 MVP-2C 人工确认 Side A 与 CAST 0° 对齐、Side A-H 顺时针、CAST.Zc 方位轴
+为 normal 后，当前 MVP-2 RelBearing 结论必须写为：
+
+```text
+relbearing_sign_status: specification_preferred_plus_data_unresolved
+primary_convention: plus
+ablation_convention: minus
+data_driven_validation: insufficient_evidence
+single_sign_alignment_approved: false
+approved_downstream_mode: plus_primary_minus_ablation
+```
+
+不得写成 `data_confirmed_plus` 或 `confirmed_plus`。plus 是文档与人工确认几何约定下
+的 specification-preferred primary convention，不是数据驱动验证结论。MVP-3 若被
+gate 允许，也只能在 plus-primary / minus-ablation workflow 下继续。
+
+Stage 7 可在 RelBearing 符号仍未确认时继续执行 orientation confidence 生成，因为
+该 mask 只依赖 `Inc`，不依赖 plus/minus 约定。默认阈值为 `I_min_deg=1.0`、
+`I_stable_deg=5.0`：`Inc <= I_min_deg` 置信度为 0，`Inc >= I_stable_deg`
+置信度为 1，中间采用线性过渡。输出必须包含：
+
+```text
+orientation_confidence_v001.npz
+orientation_confidence_report.md
+orientation_confidence_report.json
+```
+
+报告必须明确写出 orientation confidence 与 RelBearing sign 无关。
+
+MVP-2 gate report 必须汇总 depth audit、depth grid proposal、depth-only reader、
+overlap-targeted resampling、RelBearing validation overlap report 和 orientation
+confidence report。若所有对齐工程 artifact 可用、无 blocking errors，且 RelBearing
+状态为 `specification_preferred_plus_data_unresolved`，decision 为
+`conditional_go`。该 conditional go 只允许 MVP-3 的 plus-primary / minus-ablation
+弱标签审计准备，不允许 single-sign production alignment、直接生成最终弱标签、
+feature extraction 或 model training。
+
+MVP-2C 可在该 conditional gate 之后执行，用于人工确认 RelBearing sign、XSI Side
+A-H 顺序、CAST azimuth matrix direction 和 Side A offset。最新人工确认结论为：
+
+```text
+XSI receiver_count = 13
+reference_receiver_index = 7
+receiver_spacing_ft = 0.5
+source_to_receiver1_ft = 1.0
+source_to_reference_receiver_ft = 4.0
+receiver_offsets_from_R7_ft = [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5,
+                               0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+side_a_aligned_with_cast_0deg = true
+side_a_offset_deg = 0.0
+side_a_offset_status = manually_confirmed
+xsi_side_order = clockwise
+xsi_side_order_status = manually_confirmed
+cast_azimuth_direction = normal
+cast_azimuth_values = 0,2,4,...,358
+cast_azimuth_direction_status = manually_confirmed
+```
+
+MVP-2C 必须优先从
+depth-only 全 overlap、orientation confidence 和 RelBearing 平滑性中主动扫描多个
+候选窗口，再对每个候选窗口按需读取小片段 CAST/XSI 数据；不得继续把单个 fallback
+window 当作校准依据。每个窗口仍不得读取完整 waveform 或 full CAST Zc。MVP-2C 必须比较：
+
+```text
+relbearing_sign = plus / minus
+xsi_side_order = clockwise              # manually_confirmed
+cast_azimuth_direction = normal         # manually_confirmed
+side_a_offset_deg = 0.0                 # manually_confirmed
+```
+
+MVP-2C 必须输出：
+
+```text
+relbearing_calibration_report.md/json
+relbearing_candidate_windows.md
+relbearing_manual_review/*.png
+relbearing_manual_review/review_summary_template.md
+configs/alignment.relbearing_calibration.example.yaml
+```
+
+判定规则：
+
+```text
+有效窗口数 >= 5
+同一假设或属性的 multi-window support >= 70%
+best-vs-second score gap 足够大
+fallback_window_counted_as_evidence = false
+```
+
+若不满足，`final_recommendation` 必须保持
+`unresolved_keep_plus_primary_minus_ablation`。若满足，也只能写
+`data_supported_plus_recommendation` 或 `data_supported_minus_recommendation`，不得写
+`confirmed_plus` / `confirmed_minus`，不得修改 production alignment config。
+人工排除区间如 `no_eccentric_or_rb_unreliable_intervals` 必须注明单位；若项目内部 depth
+单位未确认或与排除区间不同，不得直接混用 ft/m，必须记录 warning 或先完成单位转换。
+
 Go 条件：
 
 ```text
-至少一个 RelBearing 符号明显优于未旋转
+RelBearing 符号由数据明显确认，或 gate 明确批准 specification-preferred plus
+  primary / minus ablation 的 conditional workflow
 低井斜段被标记 uncertain
 局部 depth lag 有记录
 方位坐标在 [0, 360)
@@ -687,10 +841,11 @@ Go 条件：
 No-Go 条件：
 
 ```text
-RelBearing 正负号无法区分
+RelBearing 正负号无法区分且没有文档优先 plus / dual-sign ablation 的明确限制
 对齐后相关性不提升
 低井斜段未处理
 深度错位严重且无置信度标记
+任何 single-sign production alignment 被错误批准
 ```
 
 ---
@@ -790,9 +945,123 @@ label_confidence 缺失
 标签与 QC 冲突
 ```
 
+MVP-3 当前阶段只允许生成 CAST weak-label candidates，而不是 final labels。
+当 RelBearing 状态仍为 `specification_preferred_plus_data_unresolved` 时，必须采用：
+
+```text
+primary_convention: plus
+ablation_convention: minus
+approved_downstream_mode: plus_primary_minus_ablation
+```
+
+MVP-3 gate 至少检查：
+
+```text
+CAST label input readable
+adaptive baseline valid
+plus / minus candidate metadata preserved
+label_confidence exists
+audit has no blocking errors
+human review figures exist
+no final label is falsely claimed
+```
+
+若 label coverage 极端异常、plus/minus disagreement 极高、baseline 失效或阈值
+需要人工确认，gate 必须为 `conditional_go` 或 `no_go`。
+
+MVP-3H 人工审查后记录的 human-reviewed candidate 参数组为：
+
+```yaml
+recommended_parameter_set:
+  alpha: 0.35
+  zc_min_limit: 2.5
+  severity_thresholds: [0.30, 0.45, 0.60]
+  status: human_reviewed_candidate_v001
+  final_label: false
+```
+
+RelBearing plus 被记录为 human/specification approved primary convention，但
+`data_driven_validation` 仍为 `insufficient_evidence`。minus ablation 必须保留为
+audit/control，不能作为主训练标签：
+
+```yaml
+relbearing_label_policy:
+  primary: plus
+  primary_status: human_specification_approved
+  data_driven_validation: insufficient_evidence
+  minus_ablation_retained: true
+  minus_usage: audit_only
+  single_sign_final_label_approved: false
+```
+
+该参数组只作为 weak-label candidate_v001 参数。MVP-3 gate 必须继续保持
+`conditional_go`，并显式写出：
+
+```text
+no_final_labels = true
+plus primary / minus ablation preserved
+mvp4_allowed = false
+reason = weak labels are human-reviewed candidates, but not final labels; MVP-4 requires separate approval
+```
+
+MVP-3H 后若发生以下任一情况，仍不得进入 MVP-4：
+
+```text
+缺少单独 MVP-4 进入批准
+任何脚本声称生成 final labels
+plus primary / minus ablation 元数据丢失
+threshold sensitivity 未完成或显示 coverage 对参数高度不稳定
+bad-data mask 显示大面积 non-finite、Zc <= 0 或 relative_drop > 0.95
+confidence decomposition 不能解释低 confidence 区间
+review figures 未生成或缺少 bad-data / outlier / confidence 分解图
+```
+
+MVP-3R threshold sensitivity 报告必须保存到 reports 目录：
+
+```text
+label_threshold_sensitivity_v001.md
+label_threshold_sensitivity_v001.json
+label_threshold_sensitivity_v001.csv
+```
+
+该报告只支持人工阈值复核和 gate 判断，不得被解释为 final labels 或 MVP-4 许可。
+
 ---
 
 ## 9. 相关性验证协议
+
+### 9.0 MVP-4A sanity-check scope
+
+MVP-4A 目标是验证 XSI waveform 的基础信号响应与
+`cast_weak_label_candidates_v001` 是否存在可解释统计关系。该阶段只允许：
+
+```text
+chunked XSI waveform reading
+RMS / peak_abs / mean_abs / early_energy / late_energy sanity features
+confidence-weighted statistical comparison
+review figures
+MVP-4A gate report
+```
+
+该阶段明确不允许：
+
+```text
+STC
+APES
+model training
+train/test split
+final labels
+把 weak-label candidate 称为 ground truth
+进入 MVP-4B 或 MVP-5
+```
+
+RelBearing 策略必须保持：
+
+```text
+primary_label = plus
+audit_label = minus_ablation
+single_sign_final_label_approved = false
+```
 
 ### 9.1 必做实验
 
@@ -872,7 +1141,127 @@ No-Go 条件：
 
 ---
 
-### 9.4 深度错位检验
+### 9.4 MVP-4A gate
+
+MVP-4A gate 只判断 basic XSI signal summaries 与
+`cast_weak_label_candidates_v001` 是否有足够 sanity correlation 进入 MVP-4B。它不允许
+训练模型、STC/APES、正式特征工程或 final labels。
+
+必须输入：
+
+```text
+xsi_label_samples_report_v001.json
+xsi_basic_features_report_v001.json
+xsi_cast_correlation_report_v001.json
+mvp4a_review_v001/mvp4a_review_summary_v001.json
+```
+
+允许进入 MVP-4B 的最低条件：
+
+```text
+XSI basic features extracted successfully
+label sample index valid
+high-confidence subset exists
+candidate vs non-candidate shows interpretable signal separation
+low-confidence policy respected
+no model training was performed
+no final labels were claimed
+```
+
+No-Go 条件：
+
+```text
+XSI features are mostly non-finite
+label sample mapping invalid
+high-confidence subset too small
+no interpretable separation
+any report indicates final labels
+any report indicates model training
+```
+
+输出：
+
+```text
+/home/xiaoj/cement-channel-data/reports/mvp4a_gate_report.md
+/home/xiaoj/cement-channel-data/reports/mvp4a_gate_report.json
+```
+
+MVP-4A `go` 或 `conditional_go` 最多只允许进入 MVP-4B feature engineering sanity
+work；不得直接进入 MVP-5 baseline modeling 或深度模型。
+
+---
+
+### 9.4.1 MVP-4B Stage 1 sample table and preprocessing scope
+
+MVP-4B Stage 1 只构建 side-depth baseline sample table、robust preprocessing 和诊断
+报告。该阶段仍然不训练模型，不输出模型性能，不生成 final labels。
+
+允许输入：
+
+```text
+xsi_label_samples_v001.npz
+xsi_basic_features_v001.npz
+mvp4a_gate_report.json
+```
+
+允许输出：
+
+```text
+baseline_sample_table_v001.npz
+baseline_sample_table_report_v001.json
+feature_preprocessing_diagnostics_v001.json
+mvp4b_stage1_gate_report.json
+```
+
+必须保持：
+
+```text
+primary_label = plus
+audit_label = minus_ablation
+no_model_training = true
+no_final_labels = true
+no_stc = true
+no_apes = true
+```
+
+允许进入 MVP-4B Stage 2 simple baseline sanity model 的最低条件：
+
+```text
+sample table built successfully
+high-confidence candidate/non-candidate both exist
+transformed features finite
+sample_weight valid
+depth_match_error policy applied
+plus/minus disagreement preserved as audit flag
+no final labels
+no model training in Stage 1
+```
+
+MVP-4B Stage 1 的 `go` 或 `conditional_go` 最多只允许进入 simple baseline sanity
+model；不得直接进入 MVP-5、深度学习、STC 或 APES。
+
+MVP-4B Stage 1 gate report 必须汇总：
+
+```text
+baseline_sample_table_report_v001.json
+feature_preprocessing_diagnostics_v001.json
+mvp4a_gate_report.json
+```
+
+输出：
+
+```text
+/home/xiaoj/cement-channel-data/reports/mvp4b_stage1_gate_report.md
+/home/xiaoj/cement-channel-data/reports/mvp4b_stage1_gate_report.json
+```
+
+gate decision 可为 `go`、`conditional_go` 或 `no_go`。`go` 或 `conditional_go`
+只表示允许进入 MVP-4B Stage 2 simple baseline sanity model；仍不得声称模型性能，
+不得生成 final labels，不得进入 MVP-4C、MVP-5、STC、APES 或深度学习。
+
+---
+
+### 9.5 深度错位检验
 
 目标：
 
@@ -901,7 +1290,7 @@ No-Go 条件：
 
 ---
 
-### 9.5 负对照实验
+### 9.6 负对照实验
 
 负对照输入包括：
 
@@ -928,7 +1317,7 @@ No-Go 条件：
 
 ---
 
-### 9.6 正对照实验
+### 9.7 正对照实验
 
 正对照可以使用合成或半合成异常：
 

@@ -1,0 +1,42 @@
+schema_version: schema_v001
+alignment_config_version: alignment_relbearing_v001
+status: specification_preferred_primary_data_unresolved
+selected_convention: plus_primary_minus_ablation
+relbearing_sign_status: specification_preferred_plus_data_unresolved
+primary_convention: plus
+ablation_convention: minus
+documentation_preferred_sign: plus
+documentation_formula: theta_aligned = (theta_raw + RelBearing) mod 360
+data_driven_validation: insufficient_evidence
+single_sign_alignment_approved: false
+single_sign_alignment_approval_basis: specification_only_not_data_confirmed
+approved_downstream_mode: plus_primary_minus_ablation
+documentation_basis: Halliburton Relative Bearing documentation suggests a plus convention
+  when raw side azimuth is clockwise from tool key and measured looking downhole.
+manual_confirmations:
+  side_a_aligned_with_cast_0deg: true
+  side_a_offset_deg: 0.0
+  side_a_offset_status: manually_confirmed
+  xsi_side_order: clockwise
+  xsi_side_order_status: manually_confirmed
+  cast_azimuth_direction: normal
+  cast_azimuth_direction_status: manually_confirmed
+  cast_azimuth_values: 0,2,4,...,358
+geometry_config: configs/xsi_geometry.example.yaml
+unresolved_assumptions:
+- Data-driven plus/minus/no/random metrics are not sign-discriminative in the current
+  small-slice evidence.
+allowed_candidate_conventions:
+- plus
+- minus
+- no_rotation
+- random_rotation
+manual_confirmation_required: true
+mvp3_allowed_without_data_confirmation: plus_primary_minus_ablation_only
+validation_decision: insufficient_evidence
+confidence: 0.0
+notes:
+- Do not mark plus as data-confirmed or production-approved.
+- MVP-3 may proceed only with plus as specification-preferred primary and minus as
+  ablation/control.
+- Do not use this config for single-sign production alignment.
