@@ -40,3 +40,75 @@ no_go
 
 `go` or `conditional_go` permits only MVP-4B feature-engineering sanity work. It
 does not permit MVP-5 baseline modeling, deep learning, or final label claims.
+
+## MVP-4B Simple Baseline Sanity Evaluation
+
+MVP-4B Stage 2 is a weak-label sanity model check, not production model
+evaluation. Metrics compare XSI-derived transformed features with CAST
+weak-label candidates and must not be described as ground-truth performance.
+
+Required evaluation constraints:
+
+```text
+depth-block group split only
+high-confidence azimuthal subset only
+sample_weight enabled
+plus primary labels
+minus audit comparison documented
+permutation label sanity check enabled
+no final labels
+no deep learning
+no STC
+no APES
+no production model export
+```
+
+Allowed descriptive metrics:
+
+```text
+weighted_accuracy
+balanced_accuracy
+f1
+precision
+recall
+calibration_summary
+```
+
+No-Go conditions:
+
+```text
+permutation labels match or exceed real-label sanity metrics
+depth-block split is invalid
+fold class balance is insufficient
+sample weights are invalid or all zero
+suspiciously high metrics suggest leakage
+low-confidence azimuth labels are used as strong labels
+any report claims final labels or a production model
+```
+
+Passing this gate only permits MVP-4C advanced feature engineering. It does not
+permit MVP-5, deep learning, STC, APES, or final label claims.
+
+## MVP-4B Stage 2 Gate
+
+The MVP-4B Stage 2 gate consumes the simple baseline report, review summary, and
+Stage 1 gate report. A `go` or `conditional_go` decision only permits MVP-4C
+advanced feature engineering.
+
+Required gate evidence:
+
+```text
+valid depth-block split
+sufficient high-confidence candidate/non-candidate samples
+real weak-label metrics exceed permutation-label metrics
+no leakage suspicion
+interpretable coefficient summary exists
+plus primary vs minus audit comparison exists
+no final labels
+no production model
+no deep learning / STC / APES
+```
+
+The gate must be `no_go` when permutation labels match or outperform real
+weak-label candidates, when split validity fails, or when metrics are
+suspiciously high enough to require leakage review.

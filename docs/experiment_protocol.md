@@ -1189,6 +1189,95 @@ any report indicates model training
 MVP-4A `go` 或 `conditional_go` 最多只允许进入 MVP-4B feature engineering sanity
 work；不得直接进入 MVP-5 baseline modeling 或深度模型。
 
+### 9.4.1 MVP-4B simple baseline sanity model scope
+
+MVP-4B Stage 2 只允许运行 simple baseline sanity model，用于检查
+`baseline_sample_table_v001` 中的 XSI transformed features 是否能弱监督地区分
+`cast_weak_label_candidates_v001`。该阶段不是 production training，不得声称正式模型
+性能，不得生成 final labels。
+
+允许模型：
+
+```text
+logistic_regression
+linear_probe
+```
+
+必须使用：
+
+```text
+transformed_features
+high-confidence subset only
+valid_for_azimuthal_validation = true
+sample_weight
+depth_block_group_split
+plus primary labels
+minus audit comparison
+permutation label sanity check
+```
+
+禁止：
+
+```text
+random point split
+low-confidence azimuth labels as strong supervision
+deep learning
+STC
+APES
+large-scale hyperparameter search
+production model export
+final labels
+MVP-4C or MVP-5 before the Stage 2 gate
+```
+
+Stage 2 报告中的 accuracy、F1、precision、recall、balanced accuracy 和 calibration
+summary 只表示 sanity agreement with weak-label candidates，不得称为 ground truth
+performance。
+
+depth-block group split 必须把相邻深度样本作为同一组处理。validation fold 应由完整
+depth blocks 组成，train fold 不得包含同一 block；配置 `min_gap_ft` 时，还必须从
+train fold 中剔除 validation 深度范围附近的 gap 样本。每折都必须报告 candidate 与
+non-candidate 数量，若任一类不足，Stage 2 应 warning 或停止。
+
+### 9.4.2 MVP-4B Stage 2 gate
+
+MVP-4B Stage 2 gate 只判断 simple baseline sanity model 是否足够支持进入
+MVP-4C advanced feature engineering。它不允许进入 MVP-5，不允许深度学习、STC、APES，
+也不允许 production model export。
+
+必须输入：
+
+```text
+simple_baseline_report_v001.json
+simple_baseline_review_v001/simple_baseline_review_summary_v001.json
+mvp4b_stage1_gate_report.json
+```
+
+允许进入 MVP-4C 的最低条件：
+
+```text
+baseline uses valid depth-block split
+high-confidence candidate/non-candidate subset is sufficient
+real weak-label sanity metrics exceed permutation-label baseline
+no leakage evidence
+feature coefficients are available for interpretation
+plus primary vs minus audit comparison is documented
+no final labels are claimed
+no production model is claimed
+no deep learning / STC / APES are used
+```
+
+No-Go 条件：
+
+```text
+permutation check matches or exceeds real weak-label sanity metrics
+depth-block split invalid
+suspiciously high performance suggests leakage
+low-confidence azimuth labels are used as strong supervision
+sample weights invalid
+any report enters deep learning, STC, APES, MVP-5, or production training
+```
+
 ---
 
 ### 9.5 深度错位检验
