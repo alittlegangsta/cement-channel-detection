@@ -144,3 +144,90 @@ insufficient_high_confidence_signal
 ```
 
 Outputs are review artifacts only and do not change the Stage 2 no-go decision.
+
+## MVP-4B-R Sample Weight Remediation
+
+When no-go diagnostics show single-class prediction caused by effective class
+weight imbalance, the next evaluation step is sample-weight remediation rather
+than a more complex model. Remediation weights are still weak-label sanity
+weights and must not be interpreted as final-label confidence.
+
+Required policy checks:
+
+```text
+confidence_only retained as old-policy control
+class_balanced_confidence reported
+capped_class_balanced_confidence reported and used by default
+unweighted control reported
+candidate effective weight fraction capped by config
+low-confidence azimuthal samples have zero azimuthal weight
+large depth-match-error samples have zero azimuthal weight by default
+plus/minus disagreement samples are downweighted or explicitly excluded
+per-fold effective weight balance is reported
+```
+
+The default candidate effective weight fraction should not exceed `0.60`
+without an explicit configuration change. If class-balanced weights cannot be
+constructed because either high-confidence candidate or non-candidate samples
+are absent, the remediation remains `no_go`.
+
+## MVP-4B-R Enhanced Feature Diagnostics
+
+Enhanced remediation features are descriptive transformations of existing MVP-4B
+basic features. They may be evaluated in controlled ablations but are not
+formal feature engineering approval for MVP-4C.
+
+Required checks:
+
+```text
+raw XSI waveform is not read
+labels are not used to construct features
+all enhanced transformed features are finite
+original transformed features are preserved
+side/depth normalization metadata is written
+receiver-level side-normalized metrics are skipped and reported if unavailable
+```
+
+If enhanced transformed features produce substantial non-finite values, the
+remediation remains `no_go` and must return to feature preprocessing review.
+
+## MVP-4B-R Remediation Ablation Evaluation
+
+Controlled remediation ablations must report:
+
+```text
+balanced_accuracy
+weighted_accuracy
+precision / recall / f1
+predicted_positive_rate
+candidate effective weight fraction
+permutation balanced_accuracy
+real - permutation margin
+per-fold metrics
+single-class prediction degeneracy
+leakage warning
+```
+
+If all non-degenerate class-balanced configurations fail to exceed the
+permutation sanity baseline, the remediation remains `no_go`. If only
+`confidence_only` improves while class-balanced policies do not, the result is
+treated as a sample-weight artifact rather than evidence to proceed.
+
+## MVP-4B-R Remediation Gate
+
+The remediation gate must require:
+
+```text
+class-balanced non-degenerate baseline above permutation
+real - permutation balanced_accuracy margin >= 0.03
+predicted_positive_rate not near 0 or 1
+support from at least two depth-block folds
+candidate effective weight fraction within cap
+enhanced transformed feature finite ratio = 1.0
+plus/minus disagreement strategy documented
+no final labels
+no STC / APES / deep learning / MVP-4C implementation already performed
+```
+
+Failure of these checks keeps the decision at `no_go` and recommends returning
+to label sampling or feature design instead of escalating model complexity.
