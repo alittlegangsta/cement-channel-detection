@@ -1,0 +1,46 @@
+schema_version: schema_v001
+config_version: mvp4b_sample_table_v001
+stage: MVP-4B
+task: baseline_sample_table_preprocessing
+
+input_features: xsi_basic_features_v001
+input_labels: xsi_label_samples_v001
+primary_label: plus
+audit_label: minus_ablation
+
+feature_names:
+  - rms_energy
+  - peak_abs
+  - mean_abs
+  - early_energy
+  - late_energy
+  - late_over_early_ratio
+
+transforms:
+  log1p: true
+  robust_scaling: true
+  clip_quantiles: [0.001, 0.999]
+  per_feature_scaling: true
+  optional_per_depth_normalization: true
+  optional_per_side_normalization: true
+
+sample_policy:
+  use_high_confidence_for_azimuthal: true
+  min_label_confidence: 0.5
+  low_confidence_usage: non_azimuthal_or_excluded
+  exclude_large_depth_match_error: true
+  max_depth_match_error_ft: 0.5
+  plus_minus_disagreement_policy: audit_flag_or_downweight
+  plus_minus_disagreement_weight_multiplier: 0.5
+  depth_mismatch_weight_multiplier: 0.0
+
+diagnostics:
+  min_high_confidence_samples_per_class: 20
+  max_nonfinite_transformed_fraction: 0.001
+  min_positive_sample_weight_fraction: 0.05
+  max_large_depth_match_error_fraction: 0.20
+
+no_model_training: true
+no_final_labels: true
+no_stc: true
+no_apes: true

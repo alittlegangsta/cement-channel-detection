@@ -1191,6 +1191,57 @@ work；不得直接进入 MVP-5 baseline modeling 或深度模型。
 
 ---
 
+### 9.4.1 MVP-4B Stage 1 sample table and preprocessing scope
+
+MVP-4B Stage 1 只构建 side-depth baseline sample table、robust preprocessing 和诊断
+报告。该阶段仍然不训练模型，不输出模型性能，不生成 final labels。
+
+允许输入：
+
+```text
+xsi_label_samples_v001.npz
+xsi_basic_features_v001.npz
+mvp4a_gate_report.json
+```
+
+允许输出：
+
+```text
+baseline_sample_table_v001.npz
+baseline_sample_table_report_v001.json
+feature_preprocessing_diagnostics_v001.json
+mvp4b_stage1_gate_report.json
+```
+
+必须保持：
+
+```text
+primary_label = plus
+audit_label = minus_ablation
+no_model_training = true
+no_final_labels = true
+no_stc = true
+no_apes = true
+```
+
+允许进入 MVP-4B Stage 2 simple baseline sanity model 的最低条件：
+
+```text
+sample table built successfully
+high-confidence candidate/non-candidate both exist
+transformed features finite
+sample_weight valid
+depth_match_error policy applied
+plus/minus disagreement preserved as audit flag
+no final labels
+no model training in Stage 1
+```
+
+MVP-4B Stage 1 的 `go` 或 `conditional_go` 最多只允许进入 simple baseline sanity
+model；不得直接进入 MVP-5、深度学习、STC 或 APES。
+
+---
+
 ### 9.5 深度错位检验
 
 目标：

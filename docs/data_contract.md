@@ -1186,6 +1186,74 @@ no_model_training
 early/late window energy 和派生 late/early ratio。STC、APES、训练 split、模型预测和
 final labels 均不得出现在 MVP-4A 产物中。
 
+### 7.7.3 MVP-4B baseline sample table artifacts
+
+MVP-4B Stage 1 只构建 baseline sample table 和 robust preprocessing 诊断，不训练
+模型，不进入 MVP-5，也不生成 final labels。
+
+配置文件：
+
+```text
+configs/mvp4b_sample_table.example.yaml
+```
+
+输入产物：
+
+```text
+/home/xiaoj/cement-channel-data/interim/xsi_label_samples_v001.npz
+/home/xiaoj/cement-channel-data/features/xsi_basic_features_v001.npz
+```
+
+baseline sample table 推荐以 NPZ 保存，版本为：
+
+```text
+sample_table_version = baseline_sample_table_v001
+```
+
+每行代表 one depth × one XSI side sample。必须至少包含：
+
+```text
+sample_id
+depth
+side_index
+side_azimuth_deg
+label_presence_plus
+label_severity_plus
+label_confidence_plus
+label_presence_minus_audit
+plus_minus_disagreement
+orientation_confidence
+valid_for_azimuthal_validation
+valid_for_non_azimuthal_summary
+depth_match_error
+sample_weight
+azimuthal_sample_weight
+audit_flag_plus_minus_disagreement
+exclude_nonfinite_feature
+exclude_large_depth_match_error
+feature_names
+features
+transformed_feature_names
+transformed_features
+no_model_training
+no_final_labels
+metadata_json
+```
+
+允许的 feature transforms 仅限：
+
+```text
+log1p
+winsorization / clip quantiles
+robust scaling
+optional per-depth normalization diagnostics
+optional per-side normalization diagnostics
+```
+
+`valid_for_azimuthal_validation=false` 的样本不得作为强方位监督样本；可用于
+non-azimuthal summary 或被排除。plus/minus disagreement 必须保留为 audit flag 或
+降权依据，不得丢弃 minus audit 信息。
+
 MVP-3 候选规则不得只依赖固定阈值，必须包含自适应 `Zc_base` 和
 `relative_drop`。若 `zc_min_limit` 未经人工确认，报告必须标记为
 `requires_human_threshold_confirmation`。
