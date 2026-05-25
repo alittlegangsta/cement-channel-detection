@@ -85,3 +85,36 @@ def test_correlation_warns_when_high_confidence_subset_is_small() -> None:
     )
 
     assert any("too few samples" in warning for warning in summary["warnings"])
+
+
+def test_correlation_severity_monotonicity_handles_adjacent_pairs() -> None:
+    presence = np.array([[0, 1, 1, 1]], dtype=np.int8)
+    severity = np.array([[0, 1, 2, 3]], dtype=np.int8)
+    feature_arrays = {
+        "xsi_basic_features_by_side": np.array([[[1.0], [2.0], [3.0], [4.0]]], dtype=np.float32),
+        "feature_names": np.array(["rms_energy"]),
+        "no_model_training": np.asarray(True),
+        "no_stc": np.asarray(True),
+        "no_apes": np.asarray(True),
+    }
+    label_arrays = {
+        "label_presence_plus": presence,
+        "label_presence_minus_audit": presence,
+        "label_severity_plus": severity,
+        "label_confidence_plus": np.ones_like(presence, dtype=np.float32),
+        "label_confidence_minus_audit": np.ones_like(presence, dtype=np.float32),
+        "valid_for_azimuthal_validation": np.ones_like(presence, dtype=bool),
+        "valid_for_non_azimuthal_summary": np.ones_like(presence, dtype=bool),
+        "plus_minus_disagreement": np.zeros_like(presence, dtype=bool),
+        "no_final_labels": np.asarray(True),
+    }
+
+    rows, _summary = evaluate_xsi_cast_correlation_from_arrays(
+        label_arrays=label_arrays,
+        feature_arrays=feature_arrays,
+        correlation_config=_config(),
+    )
+
+    row = next(item for item in rows if item["subset"] == "high_confidence")
+    assert row["severity_monotonic_non_decreasing"] is True
+    assert row["severity_monotonic_non_increasing"] is False

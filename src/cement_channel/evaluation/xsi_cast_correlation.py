@@ -481,10 +481,16 @@ def _monotonic(severity_means: dict[str, float | None], *, direction: str) -> bo
         return None
     if direction == "up":
         return bool(
-            all(left <= right for left, right in zip(finite_values, finite_values[1:], strict=True))
+            all(
+                left <= right
+                for left, right in zip(finite_values, finite_values[1:], strict=False)
+            )
         )
     return bool(
-        all(left >= right for left, right in zip(finite_values, finite_values[1:], strict=True))
+        all(
+            left >= right
+            for left, right in zip(finite_values, finite_values[1:], strict=False)
+        )
     )
 
 
