@@ -2169,3 +2169,11 @@ the suspicious horizontal severe band around 5700 ft. These subsets are
 diagnostic masks over existing sample tables and weak-label candidates only.
 They may support controlled time-frequency sanity recommendations, but they do
 not authorize MVP-4C, STC, APES, deep learning, or final-label creation.
+
+R3 feature separation audits must compare existing side-level enhanced,
+receiver-derived, late-over-early, and far/near receiver features across the
+label-quality subsets. The audit reports only effect sizes and distributions;
+it must not fit a model, run permutation model checks, or claim model
+performance. If high-quality subsets clearly strengthen feature separation,
+the allowed next recommendation is controlled time-frequency sanity. If they
+remain weak, the project should return to label definition or manual review.
