@@ -340,3 +340,21 @@ Depth-level separation is considered enhanced only if its best absolute effect
 size exceeds the prior side-level audit by the configured delta and reaches the
 configured sanity threshold. A passing audit may only recommend Stage 5
 depth-level gate review.
+
+## MVP-4B-R4 Depth-Level Target Gate
+
+The depth-level target gate consumes the depth-level label report, depth-level
+XSI feature report, and depth-level separation audit. It must verify:
+
+```text
+strong positive depth subset is non-empty
+clear negative depth subset is non-empty
+~5700 ft review band does not dominate positives
+depth-level separation improves over side-level audit
+no final labels
+no STC / APES / deep learning / MVP-4C
+```
+
+A `conditional_go` may allow only a depth-level baseline sanity model. It does
+not allow side-level MVP-4C, STC/APES, deep learning, production model claims,
+or final-label claims.
