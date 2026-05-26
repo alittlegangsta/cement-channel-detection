@@ -315,3 +315,28 @@ If these checks pass, the only allowed next recommendation is controlled
 time-frequency sanity. If they fail, the project remains `no_go` and should
 return to label definition review or manual annotation before adding model
 complexity.
+
+## MVP-4B-R4 Depth-Level Separation Audit
+
+Depth-level target review evaluates whether XSI depth-level aggregates separate
+CAST weak-label candidate depths more clearly than the previous side-depth
+target. It is not a production model evaluation.
+
+Required comparisons:
+
+```text
+depth_has_channel_any vs no_channel
+strong_positive depths vs clear_negative depths
+high-confidence depth only
+exclude ~5700 ft review band sensitivity
+low vs high plus/minus disagreement
+```
+
+Allowed metrics are feature distribution summaries, standardized effect size,
+single-feature threshold sanity, and depth-shift sanity checks. The audit must
+not train a model, run STC/APES, enter MVP-4C, or claim final labels.
+
+Depth-level separation is considered enhanced only if its best absolute effect
+size exceeds the prior side-level audit by the configured delta and reaches the
+configured sanity threshold. A passing audit may only recommend Stage 5
+depth-level gate review.

@@ -2283,3 +2283,16 @@ The script may aggregate existing `xsi_basic_features_v001.npz` by side,
 receiver, depth, and high-side audit sector. It must not read depth-level labels
 or weak-label fields when constructing features. High-side sector summaries are
 audit-only and must not be interpreted as final azimuth labels.
+
+Stage 4 depth-level separation audit is run by:
+
+```bash
+python scripts/06t_audit_depth_level_separation.py --config configs/paths.local.yaml
+```
+
+The audit may report effect sizes, a single-feature threshold sanity check, a
+depth-shift sanity comparison, 5700 ft exclusion sensitivity, plus/minus
+disagreement sensitivity, and review figures. It must not fit a model or claim
+formal predictive performance. If depth-level separation is stronger than the
+side-level audit, the only possible next consideration is a depth-level baseline
+sanity model through the Stage 5 gate.
