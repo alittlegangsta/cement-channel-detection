@@ -2184,3 +2184,22 @@ It never authorizes direct MVP-4C, STC, APES, deep learning, production
 training, or final-label generation. If the high-quality subsets do not improve
 separation or if the ~5700 ft review exclusion flips the result, the gate must
 remain `no_go`.
+
+## 27. MVP-4B No-Go Research Review
+
+After Stage 2, R, R2, and R3 all remain `no_go`, the next step is a research
+review document, not a new experiment or model. The review must summarize
+completed stages, direct no-go causes, ruled-out explanations, remaining
+scientific possibilities, and recommended next branches.
+
+The review output is:
+
+```text
+docs/mvp4b_no_go_review.md
+docs/decisions/ADR-0004-mvp4b-no-go-and-next-directions.md
+```
+
+The review may recommend depth-level / interval-level target review, manual
+label review packs, or explicitly approved controlled time-frequency
+feasibility. It must not authorize MVP-4C, STC, APES, deep learning, production
+modeling, final labels, or ground-truth claims for CAST weak-label candidates.
