@@ -394,3 +394,16 @@ permutation margin. Variants with too few strong positives or fold-level class
 balance failures are reported as skipped rather than forced.
 Passing this sanity check can only feed a depth-level baseline gate; it does not
 authorize MVP-4C, STC/APES, deep learning, production claims, or final labels.
+
+## MVP-4B-R4b Depth-Level Baseline Gate
+
+The depth-level baseline gate emits `go`, `conditional_go`, or `no_go`.
+It may permit only controlled depth-level feature refinement when a simple
+logistic-regression or linear-probe baseline beats its permutation baseline,
+has non-degenerate predictions, and is supported by stable depth-block folds.
+
+The gate must remain `no_go` when no target variant is usable, when the best
+real-minus-permutation margin is below the configured threshold, when the
+prediction collapses to a single class, or when any guardrail permits final
+labels, STC, APES, deep learning, production claims, or MVP-4C. A
+`conditional_go` caused by review warnings does not permit side-level MVP-4C.

@@ -2382,3 +2382,41 @@ and at least `evaluation.stable_fold_min_count` folds pass the same check.
 
 The output CSV stores review predictions and scores only. It is not a model
 artifact and must not be interpreted as production inference or final labels.
+
+### 29.1 Depth-Level Baseline Gate
+
+The Stage 4 gate is:
+
+```text
+scripts/06x_generate_depth_level_baseline_gate.py
+```
+
+It consumes the baseline sanity report and the review-figure summary:
+
+```text
+depth_level_baseline_report_v001.json
+depth_level_baseline_review_v001/depth_level_baseline_review_summary_v001.json
+```
+
+The gate writes:
+
+```text
+depth_level_baseline_gate_v001.md
+depth_level_baseline_gate_v001.json
+```
+
+Gate decisions are `go`, `conditional_go`, or `no_go`. The gate may allow only
+controlled depth-level feature refinement when the best simple baseline result:
+
+```text
+beats the label permutation baseline by the configured margin
+is not single-class degenerate
+passes the stable depth-block fold requirement
+keeps no_final_labels=true
+keeps MVP-4C/STC/APES/deep learning blocked
+```
+
+Warnings such as a skipped strong-positive variant should produce
+`conditional_go` rather than `go`. A failed gate recommends a manual label
+review pack before further feature work. The gate does not authorize side-level
+MVP-4C, STC/APES, deep learning, production modeling, or final labels.
