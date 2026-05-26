@@ -2420,3 +2420,60 @@ Warnings such as a skipped strong-positive variant should produce
 `conditional_go` rather than `go`. A failed gate recommends a manual label
 review pack before further feature work. The gate does not authorize side-level
 MVP-4C, STC/APES, deep learning, production modeling, or final labels.
+
+## 30. MVP-4B-R4c Controlled Depth-Level Feature Refinement
+
+MVP-4B-R4c is allowed only after the depth-level baseline gate returns
+`conditional_go` with
+`controlled_depth_level_feature_refinement_allowed=true`. It tests whether the
+high-confidence depth-level target signal is robust to feature-group choice,
+confidence thresholds, depth-block split count, label permutation repeats, and
+the ~5700 ft review-band exclusion.
+
+Required constraints:
+
+```text
+do not enter MVP-4C
+do not run STC or APES
+do not train deep learning models
+do not generate final labels
+do not call CAST weak-label candidates ground truth
+do not save production model weights
+do not perform unconstrained hyperparameter search
+```
+
+The refinement schema is controlled by:
+
+```text
+configs/depth_level_refinement.example.yaml
+```
+
+The schema must preserve:
+
+```text
+input_labels = depth_level_labels_v001
+input_features = depth_level_xsi_features_v001
+target_variant = high_confidence_positive_vs_clear_negative
+label_status = weak_label_candidate
+permutation_repeats >= 1
+feature_group_ablation = true
+fold_stability_required = true
+no_final_labels = true
+no_mvp4c/no_stc/no_apes/no_deep_learning = true
+```
+
+Allowed feature groups are:
+
+```text
+all_depth_features
+late_over_early_features
+energy_window_features
+side_contrast_features
+receiver_summary_features
+robust_top_features_from_baseline
+```
+
+The refinement stage may fit only logistic-regression or linear-probe sanity
+baselines. It must use depth-block splits and repeated label permutation checks.
+It reports robustness evidence only; it is not formal model training and does
+not authorize production inference or final-label creation.
