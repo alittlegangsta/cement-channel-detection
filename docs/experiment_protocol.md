@@ -2146,3 +2146,26 @@ The receiver feature gate must use the best receiver-derived result, not a
 side-level-only result. If receiver-derived features do not exceed the
 permutation baseline by the configured margin, the gate remains `no_go` even
 when side-level features are the overall best ablation.
+
+## 26. MVP-4B-R3 Label-Quality Subset Diagnostics
+
+MVP-4B-R3 is allowed only after MVP-4B-R2 remains `no_go`. It may build
+high-quality CAST weak-label candidate subsets to diagnose whether label noise
+or label mapping noise dominates the shallow-feature failure.
+
+Required constraints:
+
+```text
+do not enter MVP-4C
+do not run STC or APES
+do not train deep learning models
+do not generate final labels
+do not call CAST weak-label candidates ground truth
+```
+
+Required subsets include strong positive, clear negative, disagreement-free,
+high-confidence orientation, connected-object-only, and a review exclusion for
+the suspicious horizontal severe band around 5700 ft. These subsets are
+diagnostic masks over existing sample tables and weak-label candidates only.
+They may support controlled time-frequency sanity recommendations, but they do
+not authorize MVP-4C, STC, APES, deep learning, or final-label creation.

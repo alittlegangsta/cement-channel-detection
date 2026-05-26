@@ -183,3 +183,32 @@ overlay、plus/minus disagreement map，以及只在 candidate 区域显示的 s
 
 当前 MVP-3H gate 必须保持 `conditional_go` 且 `mvp4_allowed=false`，原因是 weak
 labels 是 human-reviewed candidates，但不是 final labels；MVP-4 需要单独明确批准。
+
+## MVP-4B-R3 Label-Quality Subsets
+
+MVP-4B-R3 只允许在 simple baseline 和 receiver-derived remediation 仍为 `no_go`
+之后构建 CAST weak-label candidate 的高质量诊断 subset。该阶段不得生成 final
+labels，也不得把 subset 当作 ground truth。
+
+必须保留：
+
+```text
+primary_label = plus
+audit_label = minus_ablation
+label_status = human_reviewed_candidate_v001
+no_final_labels = true
+```
+
+允许的 subset 仅用于诊断 label noise / label mapping noise：
+
+```text
+strong_positive: plus candidate, moderate/severe, confidence threshold, no plus/minus disagreement
+clear_negative: plus non-candidate, high confidence, no plus/minus disagreement
+high_confidence_orientation: orientation_confidence threshold
+connected_object_only: candidate connected objects above area/depth-length threshold
+exclude_review_intervals: includes the ~5700 ft horizontal severe band as review exclusion
+```
+
+`connected_object_only` 和 review exclusion 都是 weak-label quality filters，不是人工批准的
+final label 操作。若这些 filters 使 feature separation 明显增强，只能说明 label
+noise 或 mapping noise 可能是 MVP-4B no-go 的主因。
