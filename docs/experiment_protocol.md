@@ -2477,3 +2477,24 @@ The refinement stage may fit only logistic-regression or linear-probe sanity
 baselines. It must use depth-block splits and repeated label permutation checks.
 It reports robustness evidence only; it is not formal model training and does
 not authorize production inference or final-label creation.
+
+Stage 2 controlled refinement ablation is run by:
+
+```bash
+python scripts/06y_run_depth_level_refinement.py --config configs/paths.local.yaml
+```
+
+The script writes:
+
+```text
+depth_level_refinement_report_v001.md
+depth_level_refinement_report_v001.json
+depth_level_refinement_report_v001.csv
+```
+
+The report must summarize best feature group, best configuration, mean/std
+balanced accuracy, repeated permutation mean/std, margin mean/std, fold
+stability, predicted positive rate, coefficient summaries, 5700 ft sensitivity,
+feature-group dependency, split dependency, confidence-threshold sensitivity,
+leakage warnings, and a `go` / `conditional_go` / `no_go` recommendation.
+The CSV stores review predictions and scores only; it is not a model artifact.
