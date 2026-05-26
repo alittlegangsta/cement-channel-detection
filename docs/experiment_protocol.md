@@ -2203,3 +2203,54 @@ The review may recommend depth-level / interval-level target review, manual
 label review packs, or explicitly approved controlled time-frequency
 feasibility. It must not authorize MVP-4C, STC, APES, deep learning, production
 modeling, final labels, or ground-truth claims for CAST weak-label candidates.
+
+## 28. MVP-4B-R4 Depth-Level Target Review
+
+MVP-4B-R4 is a target-definition review after side-depth MVP-4B, MVP-4B-R,
+MVP-4B-R2, and MVP-4B-R3 all remain `no_go`. Its main question is whether each
+depth has an obvious CAST channel candidate. Side-level azimuth labels are
+audit-only and are not the main training target.
+
+Required constraints:
+
+```text
+do not enter MVP-4C
+do not run STC or APES
+do not train deep learning models
+do not generate final labels
+do not call CAST weak-label candidates ground truth
+do not build a production model
+```
+
+The depth-level label aggregation schema is controlled by:
+
+```text
+configs/depth_level_label.example.yaml
+```
+
+Depth-level labels must preserve `any`, `max`, `percentile`, and `fraction`
+summaries instead of mean-only aggregation. Required review fields include
+candidate fraction, max severity, max confidence, low-Zc percentiles,
+plus/minus disagreement fraction, orientation confidence, and depth label
+confidence.
+
+MVP-4B-R4 may build depth-level XSI aggregate features and run feature
+separation sanity checks only. These checks may compare strong positive depths
+against clear negative depths, high-confidence depths, 5700 ft exclusion
+sensitivity, and low-vs-high plus/minus disagreement. They must not fit complex
+models or claim formal performance.
+
+Mandatory stop conditions:
+
+```text
+depth-level positive subset is empty
+depth-level negative subset is empty
+depth-level positives are dominated by the ~5700 ft review band
+separation remains weak and the workflow attempts to continue into modeling
+any script enters STC/APES/deep learning/MVP-4C/final-label generation
+```
+
+The final gate may return `go`, `conditional_go`, or `no_go`. A positive gate
+only permits consideration of a depth-level baseline sanity model. It does not
+authorize side-level MVP-4C, STC, APES, deep learning, production modeling, or
+final labels.

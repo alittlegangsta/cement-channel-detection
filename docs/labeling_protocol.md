@@ -212,3 +212,45 @@ exclude_review_intervals: includes the ~5700 ft horizontal severe band as review
 `connected_object_only` 和 review exclusion 都是 weak-label quality filters，不是人工批准的
 final label 操作。若这些 filters 使 feature separation 明显增强，只能说明 label
 noise 或 mapping noise 可能是 MVP-4B no-go 的主因。
+
+## MVP-4B-R4 Depth-Level Target Review
+
+MVP-4B-R4 只允许把 CAST weak-label candidates 聚合成 depth-level review target，
+用于检查“每个深度是否存在明显 CAST channel candidate”。它不是 final label 生成，
+也不得把 CAST candidate 称为 ground truth。
+
+主任务字段必须来自 `configs/depth_level_label.example.yaml`，至少包含：
+
+```text
+depth_has_channel_any
+depth_candidate_fraction
+depth_max_severity
+depth_max_confidence
+depth_min_zc
+depth_p05_zc
+depth_p10_zc
+depth_max_relative_drop
+depth_largest_azimuth_object_width
+depth_plus_minus_disagreement_fraction
+depth_orientation_confidence
+depth_label_confidence
+```
+
+聚合策略必须保留 `any`、`max`、`percentile`、`fraction` 等信息，不允许只用
+mean。side-level 方位标签只能作为 audit 字段，不能作为主训练目标。
+
+必须保留：
+
+```text
+primary_label = plus
+audit_label = minus_ablation
+label_status = human_reviewed_candidate_v001
+side_level_labels.usage = audit_only
+side_level_labels.train_target = false
+no_final_labels = true
+```
+
+MVP-4B-R4 可构建 strong positive / clear negative depth 子集做 feature separation
+sanity，但这些子集仍只是 weak-label candidate review masks。若 positive 或 negative
+depth subset 为空，或 positive depth 主要由约 5700 ft horizontal severe band 主导，
+必须停止并返回人工标签审查。

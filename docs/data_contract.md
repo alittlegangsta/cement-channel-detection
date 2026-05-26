@@ -1344,6 +1344,48 @@ no_mvp4c
 These masks are weak-label quality subsets only. They are not ground truth and
 do not authorize MVP-4C, STC, APES, deep learning, or final-label creation.
 
+MVP-4B-R4 depth-level target review may additionally produce:
+
+```text
+/home/xiaoj/cement-channel-data/interim/depth_level_labels_v001.npz
+/home/xiaoj/cement-channel-data/reports/depth_level_labels_report_v001.md
+/home/xiaoj/cement-channel-data/reports/depth_level_labels_report_v001.json
+```
+
+The depth-level NPZ is a review target table over unique depth samples. It must
+not contain final labels and must at minimum include:
+
+```text
+depth
+depth_has_channel_any
+depth_candidate_fraction
+depth_max_severity
+depth_max_confidence
+depth_min_zc
+depth_p05_zc
+depth_p10_zc
+depth_max_relative_drop
+depth_largest_azimuth_object_width
+depth_plus_minus_disagreement_fraction
+depth_orientation_confidence
+depth_label_confidence
+depth_strong_positive_mask
+depth_clear_negative_mask
+depth_review_band_mask
+depth_label_version
+depth_label_metadata_json
+no_model_training
+no_final_labels
+no_stc
+no_apes
+no_deep_learning
+no_mvp4c
+```
+
+Depth-level aggregation must preserve `any`, `max`, `percentile`, and `fraction`
+signals. It must not collapse side/azimuth evidence into mean-only labels.
+Side-level labels remain audit-only and are not the main training target.
+
 Stage 2 输出仅限报告、CSV 预测审计表和 review figures：
 
 ```text
