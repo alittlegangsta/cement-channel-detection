@@ -2272,3 +2272,14 @@ The script writes only review artifacts:
 If raw CAST `Zc` is absent from the weak-label candidate NPZ, Zc summary fields
 must remain explicit NaN review fields with a report warning rather than using
 `zc_ratio` as a mislabeled substitute.
+
+Stage 3 depth-level XSI feature table is built by:
+
+```bash
+python scripts/06s_build_depth_level_xsi_features.py --config configs/paths.local.yaml
+```
+
+The script may aggregate existing `xsi_basic_features_v001.npz` by side,
+receiver, depth, and high-side audit sector. It must not read depth-level labels
+or weak-label fields when constructing features. High-side sector summaries are
+audit-only and must not be interpreted as final azimuth labels.
