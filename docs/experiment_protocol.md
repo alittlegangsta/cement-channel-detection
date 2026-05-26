@@ -2307,3 +2307,116 @@ The gate may return `go`, `conditional_go`, or `no_go`, but a passing decision
 only allows consideration of a depth-level baseline sanity model. It must keep
 `mvp4c_allowed=false`, `stc_allowed=false`, `apes_allowed=false`,
 `deep_learning_allowed=false`, and `final_labels_allowed=false`.
+
+## 29. MVP-4B-R4b Depth-Level Baseline Sanity Model
+
+MVP-4B-R4b is allowed only after the depth-level target gate returns
+`conditional_go` with `depth_level_baseline_sanity_allowed=true`. It tests
+whether depth-level XSI aggregate features can separate depth-level CAST
+weak-label candidate anomalies under a simple, permutation-safe baseline.
+
+Required constraints:
+
+```text
+do not enter MVP-4C
+do not run STC or APES
+do not train deep learning models
+do not generate final labels
+do not call CAST weak-label candidates ground truth
+do not save production model weights
+```
+
+The baseline schema is controlled by:
+
+```text
+configs/depth_level_baseline.example.yaml
+```
+
+The schema must preserve:
+
+```text
+input_labels = depth_level_labels_v001
+input_features = depth_level_xsi_features_v001
+primary_task = depth_has_channel
+label_status = weak_label_candidate
+split.method = depth_block_split
+permutation_check = true
+no_model_training_claim = true
+no_final_labels = true
+```
+
+Required target variants:
+
+```text
+all_positive_vs_negative
+strong_positive_vs_clear_negative
+high_confidence_positive_vs_clear_negative
+```
+
+If a variant has too few samples per class or cannot satisfy depth-block fold
+balance, it must be skipped with a warning rather than forced into a misleading
+baseline result.
+
+The Stage 2 runner is:
+
+```text
+scripts/06v_run_depth_level_baseline.py
+```
+
+It consumes `depth_level_labels_v001.npz` and
+`depth_level_xsi_features_v001.npz` and writes only review artifacts under the
+configured reports directory:
+
+```text
+depth_level_baseline_report_v001.md
+depth_level_baseline_report_v001.json
+depth_level_baseline_report_v001.csv
+```
+
+The runner may fit only simple logistic-regression or linear-probe sanity
+baselines. It must use depth-block splits, class-balance-aware sample weights,
+and a label permutation check for every runnable fold. A target variant is
+usable only when the real-label balanced accuracy beats the permutation
+baseline by the configured margin, predictions are not single-class degenerate,
+and at least `evaluation.stable_fold_min_count` folds pass the same check.
+
+The output CSV stores review predictions and scores only. It is not a model
+artifact and must not be interpreted as production inference or final labels.
+
+### 29.1 Depth-Level Baseline Gate
+
+The Stage 4 gate is:
+
+```text
+scripts/06x_generate_depth_level_baseline_gate.py
+```
+
+It consumes the baseline sanity report and the review-figure summary:
+
+```text
+depth_level_baseline_report_v001.json
+depth_level_baseline_review_v001/depth_level_baseline_review_summary_v001.json
+```
+
+The gate writes:
+
+```text
+depth_level_baseline_gate_v001.md
+depth_level_baseline_gate_v001.json
+```
+
+Gate decisions are `go`, `conditional_go`, or `no_go`. The gate may allow only
+controlled depth-level feature refinement when the best simple baseline result:
+
+```text
+beats the label permutation baseline by the configured margin
+is not single-class degenerate
+passes the stable depth-block fold requirement
+keeps no_final_labels=true
+keeps MVP-4C/STC/APES/deep learning blocked
+```
+
+Warnings such as a skipped strong-positive variant should produce
+`conditional_go` rather than `go`. A failed gate recommends a manual label
+review pack before further feature work. The gate does not authorize side-level
+MVP-4C, STC/APES, deep learning, production modeling, or final labels.
