@@ -358,3 +358,35 @@ no STC / APES / deep learning / MVP-4C
 A `conditional_go` may allow only a depth-level baseline sanity model. It does
 not allow side-level MVP-4C, STC/APES, deep learning, production model claims,
 or final-label claims.
+
+## MVP-4B-R4b Depth-Level Baseline Sanity
+
+Depth-level baseline sanity may use only simple logistic regression or linear
+probe baselines over `depth_level_xsi_features_v001`. It evaluates weak-label
+agreement, not formal model performance.
+
+Required target variants:
+
+```text
+all_positive_vs_negative
+strong_positive_vs_clear_negative
+high_confidence_positive_vs_clear_negative
+```
+
+Required checks:
+
+```text
+depth-block split
+fold class balance
+balanced_accuracy / precision / recall / f1
+permutation check
+real minus permutation margin
+predicted positive rate
+degenerate single-class prediction flag
+top feature coefficients
+```
+
+If permutation metrics are not lower than real-label metrics, or if predictions
+degenerate to a single class, the baseline remains `no_go` for that variant.
+Passing this sanity check can only feed a depth-level baseline gate; it does not
+authorize MVP-4C, STC/APES, deep learning, production claims, or final labels.

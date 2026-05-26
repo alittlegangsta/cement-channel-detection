@@ -1,0 +1,70 @@
+schema_version: schema_v001
+config_version: depth_level_baseline_v001
+stage: MVP-4B-R4b
+task: depth_level_baseline_sanity_model
+
+input_labels: depth_level_labels_v001
+input_features: depth_level_xsi_features_v001
+primary_task: depth_has_channel
+label_status: weak_label_candidate
+no_final_labels: true
+
+model_type:
+  - logistic_regression
+  - linear_probe
+
+feature_set:
+  - depth_level_xsi_features
+
+target_variants:
+  - all_positive_vs_negative
+  - strong_positive_vs_clear_negative
+  - high_confidence_positive_vs_clear_negative
+
+target_filters:
+  high_confidence_positive:
+    min_label_confidence: 0.5
+    min_orientation_confidence: 0.5
+    max_plus_minus_disagreement_fraction: 0.25
+  clear_negative:
+    min_label_confidence: 0.5
+    min_orientation_confidence: 0.5
+    max_plus_minus_disagreement_fraction: 0.25
+  exclude_review_band: true
+  min_samples_per_class: 20
+  min_samples_per_class_per_fold: 5
+  warn_if_variant_too_small: true
+
+split:
+  method: depth_block_split
+  n_splits: 3
+  depth_block_size_ft: 250.0
+  min_gap_ft: 5.0
+
+evaluation:
+  metrics:
+    - balanced_accuracy
+    - precision
+    - recall
+    - f1
+    - permutation_margin
+  permutation_check: true
+  permutation_seed: 202405
+  min_permutation_balanced_accuracy_margin: 0.03
+  degenerate_prediction_min_positive_rate: 0.05
+  degenerate_prediction_max_positive_rate: 0.95
+  stable_fold_min_count: 2
+
+optimizer:
+  max_iterations: 350
+  learning_rate: 0.1
+  l2_penalty: 0.0001
+
+allowed_scope: depth_level_baseline_sanity_only
+no_model_training_claim: true
+no_production_model: true
+no_final_labels: true
+no_stc: true
+no_apes: true
+no_deep_learning: true
+no_mvp4c: true
