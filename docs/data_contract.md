@@ -1302,6 +1302,48 @@ These features must use XSI basic feature arrays with shape
 weak-label fields to construct features; and must keep `no_final_labels`,
 `no_stc`, and `no_apes` true.
 
+MVP-4B-R3 label-quality subset diagnostics may additionally produce:
+
+```text
+/home/xiaoj/cement-channel-data/interim/label_quality_subsets_v001.npz
+/home/xiaoj/cement-channel-data/reports/label_quality_subsets_report_v001.md
+/home/xiaoj/cement-channel-data/reports/label_quality_subsets_report_v001.json
+```
+
+The subset NPZ is a diagnostic mask table over existing side-depth samples. It
+must not contain final labels and must at minimum preserve:
+
+```text
+sample_id
+depth
+side_index
+label_presence_plus
+label_severity_plus
+label_confidence_plus
+label_presence_minus_audit
+plus_minus_disagreement
+orientation_confidence
+depth_match_error
+strong_positive_mask
+clear_negative_mask
+disagreement_free_mask
+high_confidence_orientation_mask
+connected_object_only_mask
+review_exclusion_mask
+quality_strong_positive_mask
+quality_clear_negative_mask
+strong_clear_quality_mask
+connected_object_id
+no_final_labels
+no_stc
+no_apes
+no_deep_learning
+no_mvp4c
+```
+
+These masks are weak-label quality subsets only. They are not ground truth and
+do not authorize MVP-4C, STC, APES, deep learning, or final-label creation.
+
 Stage 2 输出仅限报告、CSV 预测审计表和 review figures：
 
 ```text

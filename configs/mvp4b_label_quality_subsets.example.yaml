@@ -1,0 +1,58 @@
+schema_version: schema_v001
+config_version: mvp4b_label_quality_subsets_v001
+stage: MVP-4B-R3
+task: label_quality_subset_diagnostics
+
+input_sample_table: baseline_sample_table_receiver_enhanced_v001
+optional_cast_weak_labels: cast_weak_label_candidates_v001
+primary_label: plus
+audit_label: minus_ablation
+label_status: human_reviewed_candidate_v001
+
+subsets:
+  strong_positive:
+    label_presence_plus: 1
+    min_severity: 2
+    min_label_confidence: 0.5
+    require_no_plus_minus_disagreement: true
+    max_depth_match_error_ft: 0.5
+  clear_negative:
+    label_presence_plus: 0
+    min_label_confidence: 0.5
+    allow_local_cast_normal: true
+    local_normal_requires_severity_none: true
+    min_local_normal_confidence: 0.0
+    require_no_plus_minus_disagreement: true
+    max_depth_match_error_ft: 0.5
+  high_confidence_orientation:
+    min_orientation_confidence: 0.7
+  connected_object_only:
+    min_area_samples: 6
+    min_depth_length_ft: 1.0
+    circular_side_connectivity: true
+  exclude_review_intervals:
+    - name: review_horizontal_severe_band_5700ft
+      depth_min_ft: 5680.0
+      depth_max_ft: 5720.0
+      reason: suspicious horizontal severe band; review exclusion and sensitivity flag
+      apply_by_default: true
+
+quality_policy:
+  min_subset_samples_per_class: 50
+  high_confidence_orientation_thresholds: [0.5, 0.7]
+  disagreement_policy: exclude_for_quality_subsets
+  suspicious_band_policy: exclude_and_report_sensitivity
+  connected_object_policy: candidate_only_filter
+
+gate:
+  signal_enhancement_effect_size_delta: 0.05
+  strong_signal_effect_size_threshold: 0.30
+  max_result_flip_fraction_from_review_exclusion: 0.50
+
+allowed_scope: label_quality_subset_diagnostics_only
+no_model_training: true
+no_final_labels: true
+no_stc: true
+no_apes: true
+no_deep_learning: true
+no_mvp4c: true

@@ -2146,3 +2146,41 @@ The receiver feature gate must use the best receiver-derived result, not a
 side-level-only result. If receiver-derived features do not exceed the
 permutation baseline by the configured margin, the gate remains `no_go` even
 when side-level features are the overall best ablation.
+
+## 26. MVP-4B-R3 Label-Quality Subset Diagnostics
+
+MVP-4B-R3 is allowed only after MVP-4B-R2 remains `no_go`. It may build
+high-quality CAST weak-label candidate subsets to diagnose whether label noise
+or label mapping noise dominates the shallow-feature failure.
+
+Required constraints:
+
+```text
+do not enter MVP-4C
+do not run STC or APES
+do not train deep learning models
+do not generate final labels
+do not call CAST weak-label candidates ground truth
+```
+
+Required subsets include strong positive, clear negative, disagreement-free,
+high-confidence orientation, connected-object-only, and a review exclusion for
+the suspicious horizontal severe band around 5700 ft. These subsets are
+diagnostic masks over existing sample tables and weak-label candidates only.
+They may support controlled time-frequency sanity recommendations, but they do
+not authorize MVP-4C, STC, APES, deep learning, or final-label creation.
+
+R3 feature separation audits must compare existing side-level enhanced,
+receiver-derived, late-over-early, and far/near receiver features across the
+label-quality subsets. The audit reports only effect sizes and distributions;
+it must not fit a model, run permutation model checks, or claim model
+performance. If high-quality subsets clearly strengthen feature separation,
+the allowed next recommendation is controlled time-frequency sanity. If they
+remain weak, the project should return to label definition or manual review.
+
+The R3 label-quality gate may return `go`, `conditional_go`, or `no_go`, but a
+passing decision only allows consideration of controlled time-frequency sanity.
+It never authorizes direct MVP-4C, STC, APES, deep learning, production
+training, or final-label generation. If the high-quality subsets do not improve
+separation or if the ~5700 ft review exclusion flips the result, the gate must
+remain `no_go`.
