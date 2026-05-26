@@ -435,3 +435,24 @@ interval decision, or another scientific judgment that needs human review.
 
 No refinement result authorizes MVP-4C, STC/APES, deep learning, production
 claims, ground-truth claims for CAST weak-label candidates, or final labels.
+
+## MVP-4B-R4c Depth-Level Refinement Gate
+
+The refinement gate consumes the refinement robustness report, prior
+depth-level baseline report, and review-figure summary. It returns `go`,
+`conditional_go`, or `no_go`.
+
+`go` requires multiple feature groups or robustness axes to remain above
+permutation, mean margin at least `0.05`, stable fold support, non-degenerate
+predicted-positive rate, robustness to excluding the ~5700 ft review band, and
+no leakage warning.
+
+`conditional_go` is required when the result exceeds permutation but depends on
+a small number of feature groups, a narrow confidence threshold, a split choice,
+or a depth interval decision requiring human review.
+
+`no_go` is required when the result does not exceed permutation, predictions
+degenerate, only one fold supports the result, leakage is suspected, or sample
+subsets are insufficient. Regardless of decision, MVP-4C, STC/APES, deep
+learning, final labels, production claims, and ground-truth claims remain
+blocked.

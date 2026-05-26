@@ -241,6 +241,64 @@ final label claims
 ground-truth claims for CAST weak-label candidates
 ```
 
+## Addendum: MVP-4B-R4 Depth-Level Direction
+
+After this side-depth no-go review, MVP-4B-R4 redefined the sanity target as a
+depth-level CAST weak-label candidate anomaly. Side-level azimuth labels remain
+audit-only and are not the primary target.
+
+Depth-level target review produced a `conditional_go` for a depth-level baseline
+sanity check:
+
+```text
+depth-level positive fraction = 0.8314575
+strong positive depths = 10
+clear negative depths = 573
+5700 ft band impact = 37 / 5910 positives, not dominant
+depth-level best abs effect size = 0.8488
+prior side-level best abs effect size = 0.3735
+```
+
+Depth-level baseline sanity then found one usable target variant:
+
+```text
+target_variant = high_confidence_positive_vs_clear_negative
+balanced_accuracy = 0.58797
+permutation balanced_accuracy = 0.50250
+permutation margin = 0.08547
+predicted_positive_rate = 0.57084
+degenerate prediction = false
+```
+
+MVP-4B-R4c controlled depth-level refinement tested feature-group, confidence
+threshold, split-count, repeated permutation, and ~5700 ft exclusion
+robustness. The refinement gate returned `go` for preparing a human decision
+pack only:
+
+```text
+best feature group = robust_top_features_from_baseline
+best confidence threshold = 0.6
+best exclude_5700_band = true
+real balanced_accuracy mean = 0.59192
+permutation balanced_accuracy mean = 0.49179
+margin mean = 0.10013
+predicted_positive_rate = 0.59532
+folds above permutation fraction = 1.0
+passing feature groups = all_depth_features, energy_window_features,
+                         receiver_summary_features,
+                         robust_top_features_from_baseline
+passing confidence thresholds = 0.4, 0.5, 0.6
+passing depth-block splits = 3, 5
+passing exclude_5700 values = false, true
+suspicious leakage = false
+```
+
+This addendum does not rewrite the side-depth MVP-4B no-go conclusion. It only
+supports continued depth-level target/refinement review and a human decision
+pack. It still does not authorize MVP-4C, STC, APES, deep learning, production
+training, production inference, final labels, or ground-truth claims for CAST
+weak-label candidates.
+
 ## Recommended Decision
 
 Keep MVP-4B in `no_go`.
@@ -256,4 +314,3 @@ Alternative branch:
 ```text
 feature/manual-label-review-pack
 ```
-
