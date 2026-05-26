@@ -292,3 +292,26 @@ no STC / APES / deep learning / MVP-4C implementation
 
 If these checks fail, the recommended next step is label refinement or
 controlled time-frequency feature sanity, not model escalation.
+
+## MVP-4B-R3 Label-Quality Subset Gate
+
+Label-quality subset diagnostics are weak-label noise diagnostics after the
+receiver-feature gate remains `no_go`. They may build strong-positive,
+clear-negative, disagreement-free, high-orientation, connected-object, and
+review-exclusion masks over existing sample tables.
+
+The gate requires:
+
+```text
+quality strong-positive and clear-negative subsets both non-empty and above the configured minimum
+feature separation on quality subsets improves over the all-candidate baseline by the configured delta
+quality subset best effect size reaches the configured sanity threshold
+the ~5700 ft review exclusion does not flip the conclusion
+no final labels
+no STC / APES / deep learning / MVP-4C implementation
+```
+
+If these checks pass, the only allowed next recommendation is controlled
+time-frequency sanity. If they fail, the project remains `no_go` and should
+return to label definition review or manual annotation before adding model
+complexity.

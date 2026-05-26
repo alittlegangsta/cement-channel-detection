@@ -2177,3 +2177,10 @@ it must not fit a model, run permutation model checks, or claim model
 performance. If high-quality subsets clearly strengthen feature separation,
 the allowed next recommendation is controlled time-frequency sanity. If they
 remain weak, the project should return to label definition or manual review.
+
+The R3 label-quality gate may return `go`, `conditional_go`, or `no_go`, but a
+passing decision only allows consideration of controlled time-frequency sanity.
+It never authorizes direct MVP-4C, STC, APES, deep learning, production
+training, or final-label generation. If the high-quality subsets do not improve
+separation or if the ~5700 ft review exclusion flips the result, the gate must
+remain `no_go`.
