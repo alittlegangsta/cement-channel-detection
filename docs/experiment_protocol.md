@@ -2254,3 +2254,21 @@ The final gate may return `go`, `conditional_go`, or `no_go`. A positive gate
 only permits consideration of a depth-level baseline sanity model. It does not
 authorize side-level MVP-4C, STC, APES, deep learning, production modeling, or
 final labels.
+
+Stage 2 depth-level label table is built by:
+
+```bash
+python scripts/06r_build_depth_level_labels.py --config configs/paths.local.yaml
+```
+
+The script writes only review artifacts:
+
+```text
+/home/xiaoj/cement-channel-data/interim/depth_level_labels_v001.npz
+/home/xiaoj/cement-channel-data/reports/depth_level_labels_report_v001.md
+/home/xiaoj/cement-channel-data/reports/depth_level_labels_report_v001.json
+```
+
+If raw CAST `Zc` is absent from the weak-label candidate NPZ, Zc summary fields
+must remain explicit NaN review fields with a report warning rather than using
+`zc_ratio` as a mislabeled substitute.

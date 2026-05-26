@@ -254,3 +254,13 @@ MVP-4B-R4 可构建 strong positive / clear negative depth 子集做 feature sep
 sanity，但这些子集仍只是 weak-label candidate review masks。若 positive 或 negative
 depth subset 为空，或 positive depth 主要由约 5700 ft horizontal severe band 主导，
 必须停止并返回人工标签审查。
+
+Depth-level candidate table 构建脚本为：
+
+```bash
+python scripts/06r_build_depth_level_labels.py --config configs/paths.local.yaml
+```
+
+输出 `depth_level_labels_v001.npz` 只允许作为 target review artifact；其中
+`depth_strong_positive_mask` 和 `depth_clear_negative_mask` 是 sanity subset，不是
+ground truth，也不是 production label。
