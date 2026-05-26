@@ -32,6 +32,9 @@ def _valid_raw_config() -> dict:
             "clear_negative": {
                 "label_presence_plus": 0,
                 "min_label_confidence": 0.5,
+                "allow_local_cast_normal": True,
+                "local_normal_requires_severity_none": True,
+                "min_local_normal_confidence": 0.0,
                 "require_no_plus_minus_disagreement": True,
                 "max_depth_match_error_ft": 0.5,
             },

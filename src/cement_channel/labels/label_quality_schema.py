@@ -45,6 +45,9 @@ class StrongPositiveSubsetConfig:
 class ClearNegativeSubsetConfig:
     label_presence_plus: int
     min_label_confidence: float
+    allow_local_cast_normal: bool
+    local_normal_requires_severity_none: bool
+    min_local_normal_confidence: float
     require_no_plus_minus_disagreement: bool
     max_depth_match_error_ft: float
 
@@ -191,6 +194,11 @@ def parse_label_quality_config(raw: dict[str, Any]) -> LabelQualityConfig:
         clear_negative=ClearNegativeSubsetConfig(
             label_presence_plus=int(negative.get("label_presence_plus", -99)),
             min_label_confidence=float(negative.get("min_label_confidence", -1.0)),
+            allow_local_cast_normal=bool(negative.get("allow_local_cast_normal", False)),
+            local_normal_requires_severity_none=bool(
+                negative.get("local_normal_requires_severity_none", False)
+            ),
+            min_local_normal_confidence=float(negative.get("min_local_normal_confidence", -1.0)),
             require_no_plus_minus_disagreement=bool(
                 negative.get("require_no_plus_minus_disagreement", False)
             ),
@@ -305,6 +313,12 @@ def _validate_clear_negative(config: ClearNegativeSubsetConfig, errors: list[str
         errors.append("clear_negative.label_presence_plus must be 0.")
     if not 0.0 <= config.min_label_confidence <= 1.0:
         errors.append("clear_negative.min_label_confidence must be within [0, 1].")
+    if not config.allow_local_cast_normal:
+        errors.append("clear_negative.allow_local_cast_normal must be true.")
+    if not config.local_normal_requires_severity_none:
+        errors.append("clear_negative.local_normal_requires_severity_none must be true.")
+    if not 0.0 <= config.min_local_normal_confidence <= 1.0:
+        errors.append("clear_negative.min_local_normal_confidence must be within [0, 1].")
     if not config.require_no_plus_minus_disagreement:
         errors.append("clear_negative must require no plus/minus disagreement.")
     if config.max_depth_match_error_ft < 0.0:
