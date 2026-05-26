@@ -388,5 +388,9 @@ top feature coefficients
 
 If permutation metrics are not lower than real-label metrics, or if predictions
 degenerate to a single class, the baseline remains `no_go` for that variant.
+The gate also requires stable fold evidence: at least the configured minimum
+number of depth-block folds must individually show a non-degenerate real minus
+permutation margin. Variants with too few strong positives or fold-level class
+balance failures are reported as skipped rather than forced.
 Passing this sanity check can only feed a depth-level baseline gate; it does not
 authorize MVP-4C, STC/APES, deep learning, production claims, or final labels.

@@ -2356,3 +2356,29 @@ high_confidence_positive_vs_clear_negative
 If a variant has too few samples per class or cannot satisfy depth-block fold
 balance, it must be skipped with a warning rather than forced into a misleading
 baseline result.
+
+The Stage 2 runner is:
+
+```text
+scripts/06v_run_depth_level_baseline.py
+```
+
+It consumes `depth_level_labels_v001.npz` and
+`depth_level_xsi_features_v001.npz` and writes only review artifacts under the
+configured reports directory:
+
+```text
+depth_level_baseline_report_v001.md
+depth_level_baseline_report_v001.json
+depth_level_baseline_report_v001.csv
+```
+
+The runner may fit only simple logistic-regression or linear-probe sanity
+baselines. It must use depth-block splits, class-balance-aware sample weights,
+and a label permutation check for every runnable fold. A target variant is
+usable only when the real-label balanced accuracy beats the permutation
+baseline by the configured margin, predictions are not single-class degenerate,
+and at least `evaluation.stable_fold_min_count` folds pass the same check.
+
+The output CSV stores review predictions and scores only. It is not a model
+artifact and must not be interpreted as production inference or final labels.
