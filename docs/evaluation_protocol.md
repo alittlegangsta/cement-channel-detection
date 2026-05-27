@@ -456,3 +456,18 @@ degenerate, only one fold supports the result, leakage is suspected, or sample
 subsets are insufficient. Regardless of decision, MVP-4C, STC/APES, deep
 learning, final labels, production claims, and ground-truth claims remain
 blocked.
+
+## Depth-Level Manual Review Pack
+
+When the refinement gate returns `go`, evaluation may proceed only to a manual
+review pack. The pack selects depth intervals for expert inspection and reports
+weak-label candidate summaries, prediction-score audit summaries, confidence,
+plus/minus disagreement, 5700 ft review-band sensitivity, and XSI feature
+summaries.
+
+The pack is not a new model evaluation and is not formal performance evidence.
+It must not train new models, generate final labels, call weak-label candidates
+ground truth, enter MVP-4C, run STC/APES, or use deep learning. The expected
+human review outcome is a checklist decision on whether the selected intervals
+are physically plausible and whether any later controlled depth-level
+refinement v2 requires separate approval.

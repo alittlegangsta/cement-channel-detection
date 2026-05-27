@@ -2538,3 +2538,36 @@ depth-level high-confidence weak-label candidate signal is robust enough to
 prepare a human decision pack. It still requires human approval before any new
 branch and does not authorize MVP-4C, STC/APES, deep learning, production
 modeling, or final labels.
+
+## 31. Depth-Level Manual Review Pack
+
+After a depth-level refinement gate of `go`, the next allowed action is a
+manual review pack. This pack is for physical plausibility review of depth-level
+weak-label candidate anomalies only. It must not train a new model, tune a
+model, generate final labels, enter MVP-4C, run STC/APES, or make production
+claims.
+
+The schema is controlled by:
+
+```text
+configs/depth_level_manual_review.example.yaml
+```
+
+The schema must preserve:
+
+```text
+input_labels = depth_level_labels_v001
+input_features = depth_level_xsi_features_v001
+input_refinement_report = depth_level_refinement_report_v001
+input_refinement_gate_report = depth_level_refinement_gate_report
+target_variant = high_confidence_positive_vs_clear_negative
+label_status = weak_label_candidate
+no_final_labels = true
+no_mvp4c/no_stc/no_apes/no_deep_learning = true
+```
+
+The review pack may select top positive-like, clear negative-like,
+high-score negative or disagreement, low-score positive, high-uncertainty,
+5700 ft review-band, and boundary-case intervals. Every selected interval must
+be described as a weak-label candidate review item, not ground truth. CAST
+label summaries and XSI feature summaries are supporting audit evidence only.
