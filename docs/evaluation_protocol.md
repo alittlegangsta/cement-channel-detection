@@ -407,3 +407,52 @@ real-minus-permutation margin is below the configured threshold, when the
 prediction collapses to a single class, or when any guardrail permits final
 labels, STC, APES, deep learning, production claims, or MVP-4C. A
 `conditional_go` caused by review warnings does not permit side-level MVP-4C.
+
+## MVP-4B-R4c Controlled Depth-Level Refinement
+
+Controlled depth-level refinement evaluates robustness, not formal model
+performance. It may use only logistic regression or linear probe baselines over
+`depth_level_xsi_features_v001` and only for
+`high_confidence_positive_vs_clear_negative` weak-label candidate sanity checks.
+
+Required robustness axes:
+
+```text
+feature group ablation
+include vs exclude ~5700 ft review band
+confidence thresholds
+3-fold vs 5-fold depth-block split
+repeated permutation checks
+per-fold margin stability
+```
+
+The refinement recommendation must remain `no_go` when the real-label result
+does not exceed permutation, when predictions are degenerate, when the result is
+supported by only one fold, when it works only with the ~5700 ft band included,
+or when leakage is suspected. A `conditional_go` is required when results depend
+on a small number of feature groups, a specific confidence threshold, a depth
+interval decision, or another scientific judgment that needs human review.
+
+No refinement result authorizes MVP-4C, STC/APES, deep learning, production
+claims, ground-truth claims for CAST weak-label candidates, or final labels.
+
+## MVP-4B-R4c Depth-Level Refinement Gate
+
+The refinement gate consumes the refinement robustness report, prior
+depth-level baseline report, and review-figure summary. It returns `go`,
+`conditional_go`, or `no_go`.
+
+`go` requires multiple feature groups or robustness axes to remain above
+permutation, mean margin at least `0.05`, stable fold support, non-degenerate
+predicted-positive rate, robustness to excluding the ~5700 ft review band, and
+no leakage warning.
+
+`conditional_go` is required when the result exceeds permutation but depends on
+a small number of feature groups, a narrow confidence threshold, a split choice,
+or a depth interval decision requiring human review.
+
+`no_go` is required when the result does not exceed permutation, predictions
+degenerate, only one fold supports the result, leakage is suspected, or sample
+subsets are insufficient. Regardless of decision, MVP-4C, STC/APES, deep
+learning, final labels, production claims, and ground-truth claims remain
+blocked.

@@ -1419,6 +1419,39 @@ Allowed feature families are side mean/max/std, receiver mean/max/std, max side
 anomaly, side contrast, late-over-early mean/max, near/far receiver ratios, and
 high-side sector summaries marked audit-only.
 
+MVP-4B-R4c controlled depth-level refinement may additionally produce review
+reports only:
+
+```text
+/home/xiaoj/cement-channel-data/reports/depth_level_refinement_report_v001.md
+/home/xiaoj/cement-channel-data/reports/depth_level_refinement_report_v001.json
+/home/xiaoj/cement-channel-data/reports/depth_level_refinement_report_v001.csv
+/home/xiaoj/cement-channel-data/reports/depth_level_refinement_review_v001/
+/home/xiaoj/cement-channel-data/reports/depth_level_refinement_gate_report.md
+/home/xiaoj/cement-channel-data/reports/depth_level_refinement_gate_report.json
+```
+
+The refinement stage must consume only `depth_level_labels_v001.npz`,
+`depth_level_xsi_features_v001.npz`, and prior depth-level baseline review
+reports. It must not create final labels, model weights, production predictions,
+or advanced-feature artifacts. Required report guardrails:
+
+```text
+target_variant = high_confidence_positive_vs_clear_negative
+label_status = weak_label_candidate
+permutation_check = true
+no_model_training_claim = true
+no_final_labels = true
+no_stc = true
+no_apes = true
+no_deep_learning = true
+no_mvp4c = true
+```
+
+The refinement CSV is a prediction/review audit table only. It must not be
+interpreted as formal model performance, production inference, final labels, or
+ground truth.
+
 Stage 2 输出仅限报告、CSV 预测审计表和 review figures：
 
 ```text
