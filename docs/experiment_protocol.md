@@ -2602,3 +2602,18 @@ writes PNG review figures and a figure summary JSON under
 `depth_level_manual_review_v001/`. Figure titles must state weak-label
 candidate or review-only scope and must not describe CAST labels as ground truth
 or final labels.
+
+Stage 4 manual review checklist is maintained at:
+
+```text
+docs/depth_level_manual_review_checklist.md
+```
+
+The checklist is the required human decision record before any next branch.
+It must explicitly answer whether high-score positives and clear negatives are
+physically plausible, how to treat false-positive-like and false-negative-like
+intervals, whether the 5700 ft band should be retained or handled separately,
+whether low-confidence/disagreement intervals should be excluded, and whether a
+separate controlled depth-level feature refinement v2 is approved. It must also
+confirm that MVP-4C, STC/APES, deep learning, production modeling, and final
+labels remain blocked unless separately approved.

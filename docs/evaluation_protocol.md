@@ -477,3 +477,10 @@ overview, per-interval CAST weak-label candidate summaries, per-interval XSI
 feature summaries, 5700 ft sensitivity, and confidence/disagreement panels.
 Figures are audit aids only; they are not labels, model outputs for production,
 or formal performance evidence.
+
+The required manual checklist is `docs/depth_level_manual_review_checklist.md`.
+Evaluation remains paused after the pack until a human reviewer answers the
+checklist questions. A later controlled depth-level feature refinement v2, if
+approved, must be a separate task and must keep MVP-4C, STC/APES, deep
+learning, production claims, and final labels blocked unless explicitly
+authorized in a new gate.
