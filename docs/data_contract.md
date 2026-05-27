@@ -1470,6 +1470,12 @@ plus/minus disagreement summary, 5700 ft review-band flag, CAST label summary,
 XSI feature summary, and a recommended review question. These are expert review
 items only and must not be interpreted as final labels or ground truth.
 
+The manual review figure stage may write PNG review figures in the same
+directory, including overview label/score/confidence plots, selected-interval
+overview, per-interval CAST weak-label candidate summary panels, per-interval
+XSI feature panels, 5700 ft sensitivity, and confidence/disagreement panels.
+These figures are review artifacts only and must not be committed to Git.
+
 Stage 2 输出仅限报告、CSV 预测审计表和 review figures：
 
 ```text

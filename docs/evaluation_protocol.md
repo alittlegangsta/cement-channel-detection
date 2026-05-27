@@ -471,3 +471,9 @@ ground truth, enter MVP-4C, run STC/APES, or use deep learning. The expected
 human review outcome is a checklist decision on whether the selected intervals
 are physically plausible and whether any later controlled depth-level
 refinement v2 requires separate approval.
+
+Manual review figures should include a depth overview, selected-interval
+overview, per-interval CAST weak-label candidate summaries, per-interval XSI
+feature summaries, 5700 ft sensitivity, and confidence/disagreement panels.
+Figures are audit aids only; they are not labels, model outputs for production,
+or formal performance evidence.
