@@ -2571,3 +2571,21 @@ high-score negative or disagreement, low-score positive, high-uncertainty,
 5700 ft review-band, and boundary-case intervals. Every selected interval must
 be described as a weak-label candidate review item, not ground truth. CAST
 label summaries and XSI feature summaries are supporting audit evidence only.
+
+Stage 2 manual review interval table is built by:
+
+```bash
+python scripts/06ab_build_depth_level_review_pack.py --config configs/paths.local.yaml
+```
+
+The script writes under:
+
+```text
+depth_level_manual_review_v001/
+```
+
+Required files are `review_intervals.csv`, `review_intervals.json`, and
+`review_summary.md`. The script may read existing refinement prediction audit
+CSV rows to select intervals, but it must not refit a model. Optional CAST
+summary inputs are `cast_weak_label_candidates_v001.npz` and
+`cast_label_input_v001.npz`; raw `.mat` input is not allowed.
