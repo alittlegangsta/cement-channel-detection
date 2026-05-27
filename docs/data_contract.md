@@ -1452,6 +1452,30 @@ The refinement CSV is a prediction/review audit table only. It must not be
 interpreted as formal model performance, production inference, final labels, or
 ground truth.
 
+After a refinement gate of `go`, the manual review pack may additionally write:
+
+```text
+/home/xiaoj/cement-channel-data/reports/depth_level_manual_review_v001/review_intervals.csv
+/home/xiaoj/cement-channel-data/reports/depth_level_manual_review_v001/review_intervals.json
+/home/xiaoj/cement-channel-data/reports/depth_level_manual_review_v001/review_summary.md
+```
+
+The manual review pack consumes existing depth-level label/feature artifacts and
+refinement review outputs only. It may optionally read
+`cast_weak_label_candidates_v001.npz` and `cast_label_input_v001.npz` for CAST
+summary panels, but it must not read raw `.mat` files. Each review interval must
+include `start_depth`, `end_depth`, `interval_type`, weak-label candidate
+summary, prediction-score summary, confidence summary, top-feature summary,
+plus/minus disagreement summary, 5700 ft review-band flag, CAST label summary,
+XSI feature summary, and a recommended review question. These are expert review
+items only and must not be interpreted as final labels or ground truth.
+
+The manual review figure stage may write PNG review figures in the same
+directory, including overview label/score/confidence plots, selected-interval
+overview, per-interval CAST weak-label candidate summary panels, per-interval
+XSI feature panels, 5700 ft sensitivity, and confidence/disagreement panels.
+These figures are review artifacts only and must not be committed to Git.
+
 Stage 2 输出仅限报告、CSV 预测审计表和 review figures：
 
 ```text

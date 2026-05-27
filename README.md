@@ -58,13 +58,14 @@ next_branch_requires_human_approval = true
 docs/mvp4b_no_go_review.md
 docs/decisions/ADR-0004-mvp4b-no-go-and-next-directions.md
 docs/depth_level_refinement_decision_pack.md
+docs/depth_level_manual_review_checklist.md
 ```
 
 下一步必须先人工确认。可讨论方向：
 
 ```text
 controlled depth-level feature refinement v2
-feature/manual-label-review-pack
+depth-level manual review pack inspection
 interval-level target review
 controlled time-frequency feasibility review
 ```
