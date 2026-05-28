@@ -2698,3 +2698,19 @@ The audit compares every mode/sign geometry-aware target with existing
 sanity checks, effect sizes, depth-block summaries, and label permutation
 checks. Mode/sign targets with collapsed positive or negative support must be
 reported as skipped rather than forced into metrics.
+
+Stage 4 geometry-aware manual review supplement is run by:
+
+```bash
+python scripts/06af_generate_geometry_alignment_review.py --config configs/paths.local.yaml
+```
+
+It writes only a new supplement directory:
+
+```text
+geometry_aware_manual_review_v001/
+```
+
+The supplement must include mode/sign comparison tables, interval-level
+geometry evidence deltas, review figures, and `review_decision_should_be_revisited`
+flags. It must not overwrite `depth_level_manual_review_v001/`.

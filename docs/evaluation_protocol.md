@@ -531,3 +531,8 @@ The alignment audit may report a no-training single-feature threshold sanity
 check with permutation labels. Targets with too few positives or clear
 negatives must be marked `skipped_sample_count`; skipped geometry modes are not
 evidence for production performance.
+
+The geometry-aware manual review supplement must be written to a new
+`geometry_aware_manual_review_v001/` directory and must not overwrite the
+original depth-level manual review pack. Evidence category changes are prompts
+for human review only; they are not final labels.

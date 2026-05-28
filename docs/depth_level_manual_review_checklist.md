@@ -55,6 +55,9 @@ interval_geometry_comparison.json
 - Geometry-aware CAST evidence may change because XSI represents a
   source-to-receiver interval response while CAST is local depth by azimuth
   evidence. Treat changed categories as review prompts, not final labels.
+- Review the geometry-aware supplement before approving any later
+  interval-level target. Pay special attention to DLR intervals where
+  `review_decision_should_be_revisited=true`.
 
 ## Interval Review Order
 
