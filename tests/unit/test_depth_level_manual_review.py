@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 
@@ -32,8 +33,24 @@ def _write_inputs(tmp_path: Path) -> dict[str, Path]:
     np.savez_compressed(
         features_path,
         depth=depth,
-        depth_level_xsi_features=np.column_stack([depth, depth[::-1]]).astype(np.float32),
-        depth_level_xsi_feature_names=np.asarray(["f0", "f1"]),
+        depth_level_xsi_features=np.column_stack(
+            [
+                np.linspace(2.5e6, 2.7e6, depth.size),
+                np.linspace(3.5e5, 3.9e5, depth.size),
+                np.linspace(1.0e12, 1.7e12, depth.size),
+                np.linspace(1.5e8, 2.0e8, depth.size),
+                np.linspace(0.1, 0.3, depth.size),
+            ]
+        ).astype(np.float32),
+        depth_level_xsi_feature_names=np.asarray(
+            [
+                "receiver_mean_peak_abs",
+                "side_mean_rms_energy",
+                "side_max_early_energy",
+                "side_mean_late_energy",
+                "side_max_late_over_early_ratio",
+            ]
+        ),
         no_final_labels=np.asarray(True),
         no_stc=np.asarray(True),
         no_apes=np.asarray(True),
@@ -93,7 +110,35 @@ def _write_inputs(tmp_path: Path) -> dict[str, Path]:
         + "\n",
         encoding="utf-8",
     )
-    return {"labels": labels_path, "features": features_path, "review_json": review_json}
+    refinement_report = tmp_path / "depth_level_refinement_report_v001.json"
+    refinement_report.write_text(
+        json.dumps(
+            {
+                "best_result": {"scenario_id": "best"},
+                "top_features": {
+                    "best": [
+                        {
+                            "feature_name": "side_max_early_energy",
+                            "mean_coefficient": 0.8,
+                        },
+                        {
+                            "feature_name": "receiver_mean_peak_abs",
+                            "mean_coefficient": -0.6,
+                        },
+                    ]
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "labels": labels_path,
+        "features": features_path,
+        "review_json": review_json,
+        "refinement_report": refinement_report,
+    }
 
 
 def test_generate_depth_level_manual_review_figures_writes_outputs(tmp_path: Path) -> None:
@@ -107,14 +152,48 @@ def test_generate_depth_level_manual_review_figures_writes_outputs(tmp_path: Pat
         output_dir=output_dir,
         overwrite=True,
         max_interval_panels=2,
+        cast_weak_label_candidates_npz=tmp_path / "missing_cast_candidates.npz",
+        refinement_report_json=paths["refinement_report"],
     )
 
     assert report.errors == []
     assert report.no_final_labels is True
     assert report.interval_cast_panel_count == 2
-    assert report.interval_xsi_panel_count == 2
+    assert report.interval_xsi_raw_panel_count == 2
+    assert report.interval_xsi_normalized_panel_count == 2
+    assert any("Optional manual review NPZ not found" in warning for warning in report.warnings)
     assert (output_dir / "overview_depth_label_score_confidence.png").read_bytes().startswith(
         b"\x89PNG"
     )
     assert (output_dir / "5700_band_sensitivity.png").exists()
-    assert (output_dir / "interval_cast_panels" / "DLR-001_cast_label_panels.png").exists()
+    assert (output_dir / "interval_cast_panels" / "DLR-001_cast_review_panels.png").exists()
+    assert (
+        output_dir / "interval_xsi_feature_panels" / "DLR-001_xsi_raw_feature_multiples.png"
+    ).exists()
+    assert (
+        output_dir / "interval_xsi_feature_panels" / "DLR-001_xsi_normalized_feature_panel.png"
+    ).exists()
+    xsi_rows = json.loads(
+        (output_dir / "interval_xsi_feature_summary_table.json").read_text(encoding="utf-8")
+    )
+    finite_z = [
+        row["robust_z_of_interval_mean"]
+        for row in xsi_rows
+        if row["feature_name"] == "side_max_early_energy"
+    ]
+    assert finite_z
+    assert all(np.isfinite(value) for value in finite_z if value is not None)
+    with (output_dir / "interval_cast_evidence_summary_table.csv").open(
+        encoding="utf-8",
+        newline="",
+    ) as handle:
+        fieldnames = csv.DictReader(handle).fieldnames
+    assert fieldnames is not None
+    assert {
+        "interval_id",
+        "presence_fraction",
+        "severity_max",
+        "zc_p05",
+        "evidence_category",
+        "has_candidate_mask",
+    } <= set(fieldnames)

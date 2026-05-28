@@ -2603,6 +2603,18 @@ writes PNG review figures and a figure summary JSON under
 candidate or review-only scope and must not describe CAST labels as ground truth
 or final labels.
 
+Per-interval XSI review figures must include raw feature small multiples with
+separate y-axes and a normalized robust-z panel for cross-feature comparison.
+The script writes `interval_xsi_feature_summary_table.csv/json` with interval
+min/mean/max/std, global percentile, robust z-score, finite ratio, nonfinite
+count, and review notes. Missing XSI features are warnings, not failures.
+
+Per-interval CAST review figures must separate 0-1 evidence metrics, severity,
+and Zc into separate panels. If candidate masks, severity maps, relative-drop
+maps, or raw Zc arrays are available, the script may generate depth/azimuth
+heatmaps. It also writes `interval_cast_evidence_summary_table.csv/json` with a
+review-only evidence category. The evidence category is not a final label.
+
 Stage 4 manual review checklist is maintained at:
 
 ```text

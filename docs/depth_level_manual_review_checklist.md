@@ -21,9 +21,37 @@ overview_depth_label_score_confidence.png
 selected_intervals_overview.png
 5700_band_sensitivity.png
 confidence_and_disagreement_panels.png
+interval_xsi_feature_summary_table.csv
+interval_xsi_feature_summary_table.json
+interval_cast_evidence_summary_table.csv
+interval_cast_evidence_summary_table.json
 interval_cast_panels/
+interval_cast_heatmaps/
 interval_xsi_feature_panels/
 ```
+
+## Visualization Caveats
+
+- XSI raw features have very different physical scales. Use the raw small
+  multiples only to inspect each feature trace on its own y-axis.
+- Use the XSI normalized robust-z panel for cross-feature comparison within an
+  interval.
+- CAST summary metrics are mixed units. Presence fraction, candidate
+  confidence, relative drop, and low-inclination fraction are plotted separately
+  from severity and Zc.
+- Do not compare CAST severity, Zc, and 0-1 summary metrics by bar height.
+- CAST evidence categories are review-only categories, not final labels.
+
+## Interval Review Order
+
+1. Inspect the CAST evidence category and the separated CAST panels.
+2. Inspect CAST heatmaps when candidate mask, severity, relative drop, or raw Zc
+   arrays are available.
+3. Inspect XSI normalized robust-z features for relative anomalies.
+4. Inspect XSI raw small multiples only for per-feature trace shape and local
+   min/mean/max.
+5. Compare the score audit with the weak-label candidate class.
+6. Record accept, reject, uncertain, or special handling.
 
 ## Required Questions
 

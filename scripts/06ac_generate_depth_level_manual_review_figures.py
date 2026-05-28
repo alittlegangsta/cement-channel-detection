@@ -34,6 +34,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--review-intervals-json", default=None)
     parser.add_argument("--depth-level-labels-npz", default=None)
     parser.add_argument("--depth-level-features-npz", default=None)
+    parser.add_argument("--cast-weak-label-candidates", default=None)
+    parser.add_argument("--cast-label-input", default=None)
+    parser.add_argument("--refinement-report", default=None)
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--max-interval-panels", type=int, default=50)
     parser.add_argument("--max-points", type=int, default=20000)
@@ -61,10 +64,28 @@ def main() -> int:
             args.depth_level_features_npz,
             "depth_level_xsi_features_v001.npz",
         )
+        cast_candidates = _resolve_optional_root_path(
+            config,
+            args.cast_weak_label_candidates,
+            "labels/cast_weak_label_candidates_v001.npz",
+        )
+        cast_label_input = _resolve_optional_interim_path(
+            config,
+            args.cast_label_input,
+            "cast_label_input_v001.npz",
+        )
+        refinement_report = _resolve_report_path(
+            config,
+            args.refinement_report,
+            "depth_level_refinement_report_v001.json",
+        )
         output_dir = _resolve_review_dir(config, args.output_dir)
         _ensure_path_within(config, review_json, key="reports", action="read")
         _ensure_path_within(config, labels_npz, key="interim", action="read")
         _ensure_path_within(config, features_npz, key="interim", action="read")
+        _ensure_optional_path_within(config, cast_candidates, key="root", action="read")
+        _ensure_optional_path_within(config, cast_label_input, key="interim", action="read")
+        _ensure_path_within(config, refinement_report, key="reports", action="read")
         _ensure_path_within(config, output_dir, key="reports", action="write")
         if args.dry_run:
             figure_report = None
@@ -77,6 +98,9 @@ def main() -> int:
                 overwrite=args.overwrite,
                 max_interval_panels=args.max_interval_panels,
                 max_points=args.max_points,
+                cast_weak_label_candidates_npz=cast_candidates,
+                cast_label_input_npz=cast_label_input,
+                refinement_report_json=refinement_report,
             )
     except (
         ManifestBuildError,
@@ -101,6 +125,7 @@ def main() -> int:
         f"warnings={len(figure_report.warnings)}; "
         f"figures={figure_report.figure_count}; "
         f"cast_panels={figure_report.interval_cast_panel_count}; "
+        f"cast_heatmaps={figure_report.interval_cast_heatmap_count}; "
         f"xsi_panels={figure_report.interval_xsi_panel_count}; "
         f"no_final_labels={figure_report.no_final_labels}."
     )
@@ -116,6 +141,44 @@ def _resolve_interim_path(config: dict[str, Any], override: str | None, filename
     if interim:
         return Path(str(interim)) / filename
     raise DepthLevelManualReviewFigureCliError("data.interim is not configured.")
+
+
+def _resolve_optional_interim_path(
+    config: dict[str, Any],
+    override: str | None,
+    filename: str,
+) -> Path | None:
+    if override:
+        return Path(override)
+    data = _as_dict(config.get("data"))
+    interim = data.get("interim")
+    if interim:
+        return Path(str(interim)) / filename
+    return None
+
+
+def _resolve_optional_root_path(
+    config: dict[str, Any],
+    override: str | None,
+    relative_path: str,
+) -> Path | None:
+    if override:
+        return Path(override)
+    data = _as_dict(config.get("data"))
+    root = data.get("root")
+    if root:
+        return Path(str(root)) / relative_path
+    return None
+
+
+def _resolve_report_path(config: dict[str, Any], override: str | None, filename: str) -> Path:
+    if override:
+        return Path(override)
+    data = _as_dict(config.get("data"))
+    reports = data.get("reports")
+    if reports:
+        return Path(str(reports)) / filename
+    raise DepthLevelManualReviewFigureCliError("data.reports is not configured.")
 
 
 def _resolve_review_file(
@@ -155,6 +218,18 @@ def _ensure_path_within(
         raise DepthLevelManualReviewFigureCliError(
             f"Refusing to {action} manual review figure path outside data.{key}: {path}"
         ) from exc
+
+
+def _ensure_optional_path_within(
+    config: dict[str, Any],
+    path: Path | None,
+    *,
+    key: str,
+    action: str,
+) -> None:
+    if path is None:
+        return
+    _ensure_path_within(config, path, key=key, action=action)
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
