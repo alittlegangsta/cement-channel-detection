@@ -526,3 +526,8 @@ manual-review evidence category deltas
 which depth/interval review target to inspect next. It must keep MVP-4C,
 STC/APES, deep learning, production claims, final labels, and ground-truth
 claims blocked.
+
+The alignment audit may report a no-training single-feature threshold sanity
+check with permutation labels. Targets with too few positives or clear
+negatives must be marked `skipped_sample_count`; skipped geometry modes are not
+evidence for production performance.

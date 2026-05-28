@@ -2686,3 +2686,15 @@ must include raw-Zc availability, sign-convention warnings, mode/sign sample
 counts, positive fractions, high-confidence counts, candidate-fraction
 distributions, max-severity distributions, disagreement fractions, and
 differences from the current R7 reference-depth baseline.
+
+Stage 3 geometry-aware alignment audit is run by:
+
+```bash
+python scripts/06ae_audit_geometry_alignment.py --config configs/paths.local.yaml
+```
+
+The audit compares every mode/sign geometry-aware target with existing
+`depth_level_xsi_features_v001.npz`. It may use only no-training threshold
+sanity checks, effect sizes, depth-block summaries, and label permutation
+checks. Mode/sign targets with collapsed positive or negative support must be
+reported as skipped rather than forced into metrics.
