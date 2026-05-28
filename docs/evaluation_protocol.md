@@ -478,6 +478,15 @@ feature summaries, 5700 ft sensitivity, and confidence/disagreement panels.
 Figures are audit aids only; they are not labels, model outputs for production,
 or formal performance evidence.
 
+Per-interval XSI figures must avoid mixing raw feature scales on one y-axis.
+Raw XSI traces should be shown as small multiples with separate y-axes, while
+robust-z or percentile-normalized panels may be used for cross-feature
+comparison. Per-interval CAST panels must separate 0-1 evidence metrics,
+severity, and Zc. Mixed-unit CAST bars are not sufficient for manual review.
+The figure stage should write review-only XSI and CAST summary tables for
+auditing finite ratios, robust z-scores, percentiles, evidence categories, and
+available CAST arrays.
+
 The required manual checklist is `docs/depth_level_manual_review_checklist.md`.
 Evaluation remains paused after the pack until a human reviewer answers the
 checklist questions. A later controlled depth-level feature refinement v2, if

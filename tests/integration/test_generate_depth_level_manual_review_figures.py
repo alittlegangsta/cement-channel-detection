@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import subprocess
 import sys
@@ -32,8 +33,16 @@ def _write_inputs(root_dir: Path) -> None:
     np.savez_compressed(
         interim_dir / "depth_level_xsi_features_v001.npz",
         depth=depth,
-        depth_level_xsi_features=np.column_stack([depth, depth[::-1]]).astype(np.float32),
-        depth_level_xsi_feature_names=np.asarray(["f0", "f1"]),
+        depth_level_xsi_features=np.column_stack(
+            [
+                np.linspace(2.5e6, 2.8e6, depth.size),
+                np.linspace(3.0e5, 4.0e5, depth.size),
+                np.linspace(1.0e12, 2.0e12, depth.size),
+            ]
+        ).astype(np.float32),
+        depth_level_xsi_feature_names=np.asarray(
+            ["receiver_mean_peak_abs", "side_mean_rms_energy", "side_max_early_energy"]
+        ),
         no_final_labels=np.asarray(True),
         no_stc=np.asarray(True),
         no_apes=np.asarray(True),
@@ -111,9 +120,22 @@ def test_generate_depth_level_manual_review_figures_cli_writes_outputs(
     assert "Depth-level manual review figures errors=0" in result.stdout
     output_dir = root_dir / "reports" / "depth_level_manual_review_v001"
     assert (output_dir / "overview_depth_label_score_confidence.png").exists()
+    assert (
+        output_dir / "interval_xsi_feature_panels" / "DLR-001_xsi_raw_feature_multiples.png"
+    ).exists()
+    assert (
+        output_dir / "interval_xsi_feature_panels" / "DLR-001_xsi_normalized_feature_panel.png"
+    ).exists()
+    assert (output_dir / "interval_cast_panels" / "DLR-001_cast_review_panels.png").exists()
+    with (output_dir / "interval_xsi_feature_summary_table.csv").open(
+        encoding="utf-8",
+        newline="",
+    ) as handle:
+        assert "global_percentile_of_interval_mean" in (csv.DictReader(handle).fieldnames or [])
     summary = json.loads(
         (output_dir / "depth_level_manual_review_figures_summary_v001.json").read_text(
             encoding="utf-8"
         )
     )
     assert summary["review_figure_version"] == "depth_level_manual_review_figures_v001"
+    assert summary["interval_xsi_panel_count"] == 2
