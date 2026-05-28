@@ -500,6 +500,9 @@ Geometry-aware alignment review compares R7 reference-depth, receiver-depth
 shifted, source-receiver midpoint, and source-receiver interval CAST
 weak-label aggregation for both depth-axis signs. The review is a supplement to
 manual review and does not change the prior depth-level refinement gate.
+The source-receiver interval mode must retain receiver-level evidence before
+depth-level summaries, and all modes must preserve any/max/percentile/fraction
+signals rather than mean-only labels.
 
 Required checks:
 

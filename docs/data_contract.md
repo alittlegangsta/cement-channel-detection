@@ -1422,6 +1422,10 @@ reference/source/receiver/midpoint/interval depths, `mode`, `sign`,
 `depth_label_confidence`, `orientation_confidence`, and explicit raw-Zc
 summary fields. If raw `Zc` is unavailable, `zc_min`, `zc_p05`, and `zc_p10`
 must be NaN with a report warning; `zc_ratio` must not be relabeled as raw Zc.
+Receiver-level aggregation fields such as `receiver_candidate_fraction`,
+`receiver_max_severity`, `receiver_label_confidence`, and
+`receiver_cast_sample_count` must be preserved so interval aggregation can be
+audited before depth-level summaries.
 
 MVP-4B-R4 depth-level XSI feature review may additionally produce:
 

@@ -2663,3 +2663,26 @@ sign remains unconfirmed. Geometry-aware depth labels and manual review
 supplements are weak-label candidate audit artifacts only. They must not call
 CAST candidates ground truth, generate final labels, run STC/APES, fit deep
 learning models, or enter MVP-4C.
+
+Stage 2 geometry-aware CAST aggregation is run by:
+
+```bash
+python scripts/06ad_build_geometry_aware_depth_labels.py --config configs/paths.local.yaml
+```
+
+The script consumes only existing CAST weak-label candidates,
+`depth_level_labels_v001.npz`, `depth_level_xsi_features_v001.npz`, and the XSI
+geometry config. It writes review artifacts:
+
+```text
+geometry_aware_depth_labels_v001.npz
+geometry_aware_depth_labels_report_v001.md
+geometry_aware_depth_labels_report_v001.json
+```
+
+`source_receiver_interval` must aggregate CAST evidence over each
+source-to-receiver interval first, then summarize across receivers. Reports
+must include raw-Zc availability, sign-convention warnings, mode/sign sample
+counts, positive fractions, high-confidence counts, candidate-fraction
+distributions, max-severity distributions, disagreement fractions, and
+differences from the current R7 reference-depth baseline.
