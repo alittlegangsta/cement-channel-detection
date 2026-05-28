@@ -436,6 +436,24 @@ receiver_offsets_from_R7_ft:
   R7=0.0, R8=0.5, R9=1.0, R10=1.5, R11=2.0, R12=2.5, R13=3.0
 ```
 
+MVP-4B-G adds a geometry-aware review schema in
+`configs/xsi_geometry.example.yaml` under `xsi_geometry`. The schema records
+`depth_axis_sign = audit_both`, `sign_convention_status = requires_audit`,
+`source_offset_relative_to_r7_ft = -4.0`, and these review-only alignment modes:
+
+```text
+r7_reference_depth
+receiver_depth_shifted
+source_receiver_midpoint
+source_receiver_interval
+```
+
+CAST remains a local depth by azimuth ultrasonic impedance observation, while
+XSI receiver features are interpreted as source-to-receiver path or
+interval-scale acoustic responses. Geometry-aware aggregates are weak-label
+candidate review artifacts only; they do not create final labels and do not
+restart side-level azimuth classification.
+
 ---
 
 ### 5.4 高边坐标归一化
@@ -1385,6 +1403,25 @@ no_mvp4c
 Depth-level aggregation must preserve `any`, `max`, `percentile`, and `fraction`
 signals. It must not collapse side/azimuth evidence into mean-only labels.
 Side-level labels remain audit-only and are not the main training target.
+
+MVP-4B-G may additionally write geometry-aware CAST depth-label review
+artifacts:
+
+```text
+/home/xiaoj/cement-channel-data/interim/geometry_aware_depth_labels_v001.npz
+/home/xiaoj/cement-channel-data/reports/geometry_aware_depth_labels_report_v001.md
+/home/xiaoj/cement-channel-data/reports/geometry_aware_depth_labels_report_v001.json
+```
+
+The geometry-aware NPZ compares `r7_reference_depth`,
+`receiver_depth_shifted`, `source_receiver_midpoint`, and
+`source_receiver_interval` for both depth-axis signs. Required fields include
+reference/source/receiver/midpoint/interval depths, `mode`, `sign`,
+`candidate_fraction`, `max_severity`, `max_confidence`,
+`max_relative_drop`, `plus_minus_disagreement_fraction`,
+`depth_label_confidence`, `orientation_confidence`, and explicit raw-Zc
+summary fields. If raw `Zc` is unavailable, `zc_min`, `zc_p05`, and `zc_p10`
+must be NaN with a report warning; `zc_ratio` must not be relabeled as raw Zc.
 
 MVP-4B-R4 depth-level XSI feature review may additionally produce:
 

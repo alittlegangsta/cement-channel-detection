@@ -30,6 +30,17 @@ interval_cast_heatmaps/
 interval_xsi_feature_panels/
 ```
 
+Geometry-aware supplement, if present:
+
+```text
+/home/xiaoj/cement-channel-data/reports/geometry_aware_manual_review_v001/
+review_summary.md
+geometry_mode_comparison.csv
+geometry_mode_comparison.json
+interval_geometry_comparison.csv
+interval_geometry_comparison.json
+```
+
 ## Visualization Caveats
 
 - XSI raw features have very different physical scales. Use the raw small
@@ -41,6 +52,9 @@ interval_xsi_feature_panels/
   from severity and Zc.
 - Do not compare CAST severity, Zc, and 0-1 summary metrics by bar height.
 - CAST evidence categories are review-only categories, not final labels.
+- Geometry-aware CAST evidence may change because XSI represents a
+  source-to-receiver interval response while CAST is local depth by azimuth
+  evidence. Treat changed categories as review prompts, not final labels.
 
 ## Interval Review Order
 
@@ -70,6 +84,10 @@ interval_xsi_feature_panels/
    step?
 8. Should MVP-4C, STC/APES, deep learning, production modeling, and final labels
    remain blocked?
+9. Does the geometry-aware supplement require confirming depth-axis sign before
+   any later interval-level target review?
+10. Do any DLR intervals need re-review because source-receiver interval
+    aggregation changes the CAST evidence category?
 
 ## Review Decision Template
 
@@ -85,6 +103,8 @@ false_negative_like_primary_explanation: label_noise/xsi_insensitive/subtle_anom
 low_confidence_disagreement_policy: keep/down_weight/exclude/uncertain
 approve_controlled_depth_level_feature_refinement_v2: yes/no/conditional
 mvp4c_stc_apes_deep_learning_final_labels_still_blocked: yes/no
+depth_axis_sign_requires_confirmation: yes/no/uncertain
+dlr_intervals_requiring_geometry_re_review:
 
 required_notes:
 ```

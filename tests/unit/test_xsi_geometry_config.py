@@ -9,13 +9,22 @@ def test_xsi_geometry_example_records_manual_confirmations() -> None:
     config = yaml.safe_load(
         Path("configs/xsi_geometry.example.yaml").read_text(encoding="utf-8")
     )
+    geometry = config["xsi_geometry"]
 
-    assert config["receiver_count"] == 13
-    assert config["reference_receiver_index"] == 7
-    assert config["receiver_spacing_ft"] == 0.5
-    assert config["source_to_receiver1_ft"] == 1.0
-    assert config["source_to_reference_receiver_ft"] == 4.0
-    assert config["receiver_offsets_from_reference_ft"] == {
+    assert geometry["receiver_count"] == 13
+    assert geometry["reference_receiver_index"] == 7
+    assert geometry["receiver_spacing_ft"] == 0.5
+    assert geometry["r1_source_distance_ft"] == 1.0
+    assert geometry["source_offset_relative_to_r7_ft"] == -4.0
+    assert geometry["depth_axis_sign"] == "audit_both"
+    assert geometry["sign_convention_status"] == "requires_audit"
+    assert geometry["alignment_modes"] == [
+        "r7_reference_depth",
+        "receiver_depth_shifted",
+        "source_receiver_midpoint",
+        "source_receiver_interval",
+    ]
+    assert geometry["receiver_offsets_relative_to_r7_ft"] == {
         "R1": -3.0,
         "R2": -2.5,
         "R3": -2.0,

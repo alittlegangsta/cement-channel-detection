@@ -2629,3 +2629,37 @@ whether low-confidence/disagreement intervals should be excluded, and whether a
 separate controlled depth-level feature refinement v2 is approved. It must also
 confirm that MVP-4C, STC/APES, deep learning, production modeling, and final
 labels remain blocked unless separately approved.
+
+## 32. MVP-4B-G Geometry-Aware XSI-CAST Alignment Review
+
+MVP-4B-G is a review supplement after the depth-level refinement gate. It does
+not alter the existing refinement gate conclusion and does not approve MVP-4C,
+STC, APES, deep learning, production modeling, or final labels.
+
+The review records the physical scale mismatch:
+
+```text
+CAST = local depth x azimuth ultrasonic impedance observation
+XSI = source-to-receiver path / interval-scale acoustic response
+```
+
+The geometry schema is:
+
+```text
+configs/xsi_geometry.example.yaml
+```
+
+Required geometry-aware alignment modes:
+
+```text
+r7_reference_depth
+receiver_depth_shifted
+source_receiver_midpoint
+source_receiver_interval
+```
+
+Each mode must be audited with `sign=+1` and `sign=-1` while the depth-axis
+sign remains unconfirmed. Geometry-aware depth labels and manual review
+supplements are weak-label candidate audit artifacts only. They must not call
+CAST candidates ground truth, generate final labels, run STC/APES, fit deep
+learning models, or enter MVP-4C.

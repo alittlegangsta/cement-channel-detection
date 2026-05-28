@@ -493,3 +493,33 @@ checklist questions. A later controlled depth-level feature refinement v2, if
 approved, must be a separate task and must keep MVP-4C, STC/APES, deep
 learning, production claims, and final labels blocked unless explicitly
 authorized in a new gate.
+
+## MVP-4B-G Geometry-Aware Alignment Gate
+
+Geometry-aware alignment review compares R7 reference-depth, receiver-depth
+shifted, source-receiver midpoint, and source-receiver interval CAST
+weak-label aggregation for both depth-axis signs. The review is a supplement to
+manual review and does not change the prior depth-level refinement gate.
+
+Required checks:
+
+```text
+candidate/negative counts
+high-confidence subset counts
+positive fraction
+best absolute effect size
+balanced_accuracy
+permutation balanced_accuracy
+real minus permutation margin
+predicted positive rate
+folds above permutation
+5700-band dependency
+leakage warnings
+sign sensitivity
+manual-review evidence category deltas
+```
+
+`go` or `conditional_go` from this gate may only support a human decision about
+which depth/interval review target to inspect next. It must keep MVP-4C,
+STC/APES, deep learning, production claims, final labels, and ground-truth
+claims blocked.

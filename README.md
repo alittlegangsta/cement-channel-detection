@@ -49,6 +49,7 @@ mvp4c_consideration_allowed = false
 controlled_time_frequency_sanity_allowed = false
 no_final_labels = true
 depth_level_refinement_gate = go
+geometry_aware_xsi_cast_alignment = review supplement only
 next_branch_requires_human_approval = true
 ```
 
@@ -67,6 +68,7 @@ docs/depth_level_manual_review_checklist.md
 controlled depth-level feature refinement v2
 depth-level manual review pack inspection
 interval-level target review
+geometry-aware XSI-CAST alignment review
 controlled time-frequency feasibility review
 ```
 

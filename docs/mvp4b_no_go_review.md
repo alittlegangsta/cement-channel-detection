@@ -299,6 +299,23 @@ pack. It still does not authorize MVP-4C, STC, APES, deep learning, production
 training, production inference, final labels, or ground-truth claims for CAST
 weak-label candidates.
 
+## Addendum: MVP-4B-G Geometry-Aware Review Supplement
+
+MVP-4B-G records an additional physical-scale caveat: CAST `Zc` is a local
+depth by azimuth ultrasonic impedance observation, while XSI receiver features
+represent source-to-receiver path or interval-scale acoustic response. This can
+make false-positive-like and false-negative-like manual review intervals
+depend on whether CAST evidence is aggregated at the R7 reference depth,
+receiver-shifted depths, source-receiver midpoints, or full
+source-receiver intervals.
+
+This supplement audits both depth-axis signs because the source/receiver
+offset sign is not yet confirmed in the logging depth convention. It does not
+change the existing side-depth MVP-4B no-go conclusion or the depth-level
+refinement gate conclusion. It also does not authorize MVP-4C, STC, APES, deep
+learning, production modeling, final labels, or ground-truth claims for CAST
+weak-label candidates.
+
 ## Recommended Decision
 
 Keep MVP-4B in `no_go`.
