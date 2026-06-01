@@ -9,6 +9,7 @@ from typing import Any
 
 import numpy as np
 import yaml
+from scipy.ndimage import label as connected_label
 
 from cement_channel.alignment.xsi_geometry import ReceiverGeometry
 from cement_channel.labels.cast_zc_source import CastZcSource, load_controlled_cast_zc_source
@@ -287,9 +288,20 @@ class CastContext:
     depth: np.ndarray
     zc: np.ndarray
     relative_drop: np.ndarray | None
+    finite: np.ndarray
     raw_candidate: np.ndarray
     relative_candidate: np.ndarray | None
     combined_candidate: np.ndarray
+    finite_count_by_depth: np.ndarray
+    raw_count_by_depth: np.ndarray
+    relative_count_by_depth: np.ndarray | None
+    combined_count_by_depth: np.ndarray
+    finite_count_cumsum: np.ndarray
+    raw_count_cumsum: np.ndarray
+    relative_count_cumsum: np.ndarray | None
+    combined_count_cumsum: np.ndarray
+    finite_azimuth_cumsum: np.ndarray
+    combined_azimuth_cumsum: np.ndarray
 
 
 def _build_cast_context(
@@ -302,20 +314,40 @@ def _build_cast_context(
     order = np.argsort(raw_source.cast_depth)
     zc = raw_source.cast_zc[order].astype(np.float32)
     rel = None if relative_drop is None else relative_drop[order].astype(np.float32)
-    raw_candidate = np.isfinite(zc) & (zc < zc_threshold)
+    finite = np.isfinite(zc)
+    raw_candidate = finite & (zc < zc_threshold)
     if rel is None:
         relative_candidate = None
         combined = raw_candidate
     else:
         relative_candidate = np.isfinite(rel) & (rel >= relative_drop_threshold)
         combined = raw_candidate | relative_candidate
+    finite_count = np.count_nonzero(finite, axis=1).astype(np.int64)
+    raw_count = np.count_nonzero(raw_candidate, axis=1).astype(np.int64)
+    relative_count = (
+        None
+        if relative_candidate is None
+        else np.count_nonzero(relative_candidate & finite, axis=1).astype(np.int64)
+    )
+    combined_count = np.count_nonzero(combined & finite, axis=1).astype(np.int64)
     return CastContext(
         depth=raw_source.cast_depth[order].astype(np.float32),
         zc=zc,
         relative_drop=rel,
+        finite=finite,
         raw_candidate=raw_candidate,
         relative_candidate=relative_candidate,
-        combined_candidate=combined,
+        combined_candidate=combined & finite,
+        finite_count_by_depth=finite_count,
+        raw_count_by_depth=raw_count,
+        relative_count_by_depth=relative_count,
+        combined_count_by_depth=combined_count,
+        finite_count_cumsum=_count_cumsum(finite_count),
+        raw_count_cumsum=_count_cumsum(raw_count),
+        relative_count_cumsum=None if relative_count is None else _count_cumsum(relative_count),
+        combined_count_cumsum=_count_cumsum(combined_count),
+        finite_azimuth_cumsum=_azimuth_cumsum(finite),
+        combined_azimuth_cumsum=_azimuth_cumsum(combined & finite),
     )
 
 
@@ -366,17 +398,31 @@ def _aggregate_kernel(
 ) -> dict[str, np.ndarray]:
     shape = regions["receiver_depth"].shape
     output = _empty_metric_arrays(shape)
+    cache: dict[tuple[int, int, bool, float], dict[str, float | int]] = {}
     for index in np.ndindex(shape):
         lower = float(regions["interval_min_depth"][index])
         upper = float(regions["interval_max_depth"][index])
         midpoint = float(regions["midpoint_depth"][index])
-        metrics = _aggregate_region(
-            lower,
-            upper,
-            midpoint=midpoint,
-            context=context,
-            weighted=weighted,
+        start, stop = _depth_region_bounds(context.depth, lower, upper)
+        cache_key = (
+            start,
+            stop,
+            weighted,
+            round(midpoint, 6) if weighted else 0.0,
         )
+        if cache_key in cache:
+            metrics = cache[cache_key]
+        else:
+            metrics = _aggregate_region_bounds(
+                start,
+                stop,
+                lower,
+                upper,
+                midpoint=midpoint,
+                context=context,
+                weighted=weighted,
+            )
+            cache[cache_key] = metrics
         for key, value in metrics.items():
             output[key][index] = value
     return output
@@ -390,63 +436,160 @@ def _aggregate_region(
     context: CastContext,
     weighted: bool,
 ) -> dict[str, float | int]:
-    region_slice = _depth_region_slice(context.depth, lower, upper)
-    depth_subset = context.depth[region_slice]
-    possible_cell_count = int(depth_subset.size * context.zc.shape[1])
-    if possible_cell_count == 0:
-        return _empty_region_metrics()
-    zc = context.zc[region_slice]
-    finite = np.isfinite(zc)
-    total = int(np.count_nonzero(finite))
-    if total == 0:
-        return {**_empty_region_metrics(), "total_cell_count": 0}
-    raw = context.raw_candidate[region_slice] & finite
-    rel = (
-        None
-        if context.relative_candidate is None
-        else context.relative_candidate[region_slice]
-    )
-    combined = context.combined_candidate[region_slice] & finite
-    rel_mask = np.zeros_like(raw, dtype=bool) if rel is None else rel & finite
-    weights = _region_weights(
-        depth_subset,
-        zc.shape[1],
-        lower=lower,
-        upper=upper,
+    start, stop = _depth_region_bounds(context.depth, lower, upper)
+    return _aggregate_region_bounds(
+        start,
+        stop,
+        lower,
+        upper,
         midpoint=midpoint,
+        context=context,
         weighted=weighted,
     )
-    finite_weights = np.where(finite, weights, 0.0)
-    denominator = float(np.sum(finite_weights))
+
+
+def _aggregate_region_bounds(
+    start: int,
+    stop: int,
+    lower: float,
+    upper: float,
+    *,
+    midpoint: float,
+    context: CastContext,
+    weighted: bool,
+) -> dict[str, float | int]:
+    row_count = stop - start
+    possible_cell_count = int(row_count * context.zc.shape[1])
+    if possible_cell_count == 0:
+        return _empty_region_metrics()
+    total = _range_sum(context.finite_count_cumsum, start, stop)
+    if total == 0:
+        return {**_empty_region_metrics(), "total_cell_count": 0}
+    raw_count = _range_sum(context.raw_count_cumsum, start, stop)
+    relative_count = (
+        0
+        if context.relative_count_cumsum is None
+        else _range_sum(context.relative_count_cumsum, start, stop)
+    )
+    combined_count = _range_sum(context.combined_count_cumsum, start, stop)
     weighted_fraction = (
-        0.0 if denominator <= 0.0 else float(np.sum(finite_weights * raw) / denominator)
+        _weighted_raw_fraction(
+            start,
+            stop,
+            lower,
+            upper,
+            midpoint=midpoint,
+            context=context,
+        )
+        if weighted
+        else float(raw_count / total)
     )
-    relative_fraction = _fraction(rel_mask, finite)
-    combined_fraction = _fraction(combined, finite)
+    zc = context.zc[start:stop]
+    finite = context.finite[start:stop]
     zc_finite = zc[finite]
-    relative_drop = (
-        None if context.relative_drop is None else context.relative_drop[region_slice]
-    )
+    relative_drop = None if context.relative_drop is None else context.relative_drop[start:stop]
     max_relative_drop = np.nan
     if relative_drop is not None:
         rel_values = relative_drop[np.isfinite(relative_drop)]
         if rel_values.size:
             max_relative_drop = float(np.max(rel_values))
+    combined = context.combined_candidate[start:stop]
     return {
-        "raw_channel_fraction_zc_lt_2p5": _fraction(raw, finite),
+        "raw_channel_fraction_zc_lt_2p5": float(raw_count / total),
         "weighted_channel_fraction_zc_lt_2p5": weighted_fraction,
-        "relative_anomaly_fraction": relative_fraction,
-        "combined_channel_fraction": combined_fraction,
+        "relative_anomaly_fraction": float(relative_count / total),
+        "combined_channel_fraction": float(combined_count / total),
         "min_zc": float(np.min(zc_finite)),
         "p05_zc": float(np.percentile(zc_finite, 5.0)),
         "p10_zc": float(np.percentile(zc_finite, 10.0)),
         "max_relative_drop": max_relative_drop,
-        "candidate_cell_count": int(np.count_nonzero(raw)),
+        "candidate_cell_count": raw_count,
         "total_cell_count": total,
-        "largest_connected_component_fraction": _largest_component_fraction(combined, finite),
-        "max_azimuth_channel_fraction": _max_azimuth_fraction(combined, finite),
+        "largest_connected_component_fraction": _largest_component_fraction(
+            combined,
+            finite,
+            total=total,
+        ),
+        "max_azimuth_channel_fraction": _max_azimuth_fraction_from_cumsum(
+            context,
+            start,
+            stop,
+        ),
         "depth_label_confidence": float(total / possible_cell_count),
     }
+
+
+def _weighted_raw_fraction(
+    start: int,
+    stop: int,
+    lower: float,
+    upper: float,
+    *,
+    midpoint: float,
+    context: CastContext,
+) -> float:
+    depth_subset = context.depth[start:stop]
+    weights = _depth_weights(
+        depth_subset,
+        lower=lower,
+        upper=upper,
+        midpoint=midpoint,
+    )
+    denominator = float(np.sum(weights * context.finite_count_by_depth[start:stop]))
+    if denominator <= 0.0:
+        return 0.0
+    numerator = float(np.sum(weights * context.raw_count_by_depth[start:stop]))
+    return numerator / denominator
+
+
+def _depth_weights(
+    depth: np.ndarray,
+    *,
+    lower: float,
+    upper: float,
+    midpoint: float,
+) -> np.ndarray:
+    half_width = max(abs(upper - midpoint), abs(midpoint - lower), 1e-6)
+    depth_weights = 1.0 - np.abs(depth.astype(np.float32) - midpoint) / half_width
+    return np.clip(depth_weights, 0.0, 1.0).astype(np.float32)
+
+
+def _max_azimuth_fraction_from_cumsum(
+    context: CastContext,
+    start: int,
+    stop: int,
+) -> float:
+    denominator = context.finite_azimuth_cumsum[stop] - context.finite_azimuth_cumsum[start]
+    numerator = (
+        context.combined_azimuth_cumsum[stop] - context.combined_azimuth_cumsum[start]
+    )
+    fractions = np.divide(
+        numerator,
+        denominator,
+        out=np.zeros_like(numerator, dtype=np.float32),
+        where=denominator > 0,
+    )
+    return float(np.max(fractions)) if fractions.size else 0.0
+
+
+def _range_sum(cumsum: np.ndarray, start: int, stop: int) -> int:
+    return int(cumsum[stop] - cumsum[start])
+
+
+def _count_cumsum(counts: np.ndarray) -> np.ndarray:
+    return np.concatenate(
+        [np.zeros(1, dtype=np.int64), np.cumsum(counts, dtype=np.int64)]
+    )
+
+
+def _azimuth_cumsum(mask: np.ndarray) -> np.ndarray:
+    leading = np.zeros((1, mask.shape[1]), dtype=np.int64)
+    return np.vstack([leading, np.cumsum(mask.astype(np.int64), axis=0)])
+
+
+def _depth_region_bounds(depth: np.ndarray, lower: float, upper: float) -> tuple[int, int]:
+    region_slice = _depth_region_slice(depth, lower, upper)
+    return int(region_slice.start or 0), int(region_slice.stop or 0)
 
 
 def _depth_region_slice(depth: np.ndarray, lower: float, upper: float) -> slice:
@@ -471,23 +614,6 @@ def _depth_region_slice(depth: np.ndarray, lower: float, upper: float) -> slice:
         int(np.searchsorted(depth, min(lower, upper), side="left")),
         int(np.searchsorted(depth, max(lower, upper), side="right")),
     )
-
-
-def _region_weights(
-    depth: np.ndarray,
-    azimuth_count: int,
-    *,
-    lower: float,
-    upper: float,
-    midpoint: float,
-    weighted: bool,
-) -> np.ndarray:
-    if not weighted:
-        return np.ones((depth.size, azimuth_count), dtype=np.float32)
-    half_width = max(abs(upper - midpoint), abs(midpoint - lower), 1e-6)
-    depth_weights = 1.0 - np.abs(depth.astype(np.float32) - midpoint) / half_width
-    depth_weights = np.clip(depth_weights, 0.0, 1.0).astype(np.float32)
-    return depth_weights[:, None].repeat(azimuth_count, axis=1)
 
 
 def _full_360_fraction(regions: dict[str, np.ndarray], *, context: CastContext) -> np.ndarray:
@@ -698,54 +824,52 @@ def _empty_region_metrics() -> dict[str, float | int]:
     }
 
 
-def _fraction(mask: np.ndarray, valid: np.ndarray) -> float:
-    denominator = int(np.count_nonzero(valid))
-    return 0.0 if denominator == 0 else float(np.count_nonzero(mask) / denominator)
-
-
-def _largest_component_fraction(candidate: np.ndarray, finite: np.ndarray) -> float:
+def _largest_component_fraction(
+    candidate: np.ndarray,
+    finite: np.ndarray,
+    *,
+    total: int,
+) -> float:
     valid_candidate = candidate & finite
-    total = int(np.count_nonzero(finite))
     if total == 0 or not np.any(valid_candidate):
         return 0.0
-    visited = np.zeros(valid_candidate.shape, dtype=bool)
-    largest = 0
-    rows, cols = valid_candidate.shape
-    for start in zip(*np.nonzero(valid_candidate), strict=False):
-        if visited[start]:
-            continue
-        stack = [start]
-        visited[start] = True
-        count = 0
-        while stack:
-            row, col = stack.pop()
-            count += 1
-            for next_row, next_col in (
-                (row - 1, col),
-                (row + 1, col),
-                (row, (col - 1) % cols),
-                (row, (col + 1) % cols),
-            ):
-                if next_row < 0 or next_row >= rows:
-                    continue
-                if visited[next_row, next_col] or not valid_candidate[next_row, next_col]:
-                    continue
-                visited[next_row, next_col] = True
-                stack.append((next_row, next_col))
-        largest = max(largest, count)
-    return float(largest / total)
-
-
-def _max_azimuth_fraction(candidate: np.ndarray, finite: np.ndarray) -> float:
-    denominator = np.count_nonzero(finite, axis=0)
-    numerator = np.count_nonzero(candidate & finite, axis=0)
-    fractions = np.divide(
-        numerator,
-        denominator,
-        out=np.zeros_like(numerator, dtype=np.float32),
-        where=denominator > 0,
+    azimuth_count = valid_candidate.shape[1]
+    tiled = np.concatenate([valid_candidate, valid_candidate, valid_candidate], axis=1)
+    structure = np.asarray(
+        [[False, True, False], [True, True, True], [False, True, False]],
+        dtype=bool,
     )
-    return float(np.max(fractions)) if fractions.size else 0.0
+    labels, _count = connected_label(tiled, structure=structure)
+    center = labels[:, azimuth_count : 2 * azimuth_count].astype(np.int32)
+    component_ids = np.unique(center[center > 0])
+    if component_ids.size == 0:
+        return 0.0
+    parent = {int(component_id): int(component_id) for component_id in component_ids}
+    for row in range(center.shape[0]):
+        left_id = int(center[row, 0])
+        right_id = int(center[row, -1])
+        if left_id > 0 and right_id > 0:
+            _union_parent(parent, left_id, right_id)
+    label_values = center[center > 0]
+    lookup = np.arange(int(np.max(label_values)) + 1, dtype=np.int32)
+    for component_id in component_ids:
+        lookup[int(component_id)] = _find_parent(parent, int(component_id))
+    counts = np.bincount(lookup[label_values])
+    return float(np.max(counts) / total)
+
+
+def _find_parent(parent: dict[int, int], item: int) -> int:
+    while parent[item] != item:
+        parent[item] = parent[parent[item]]
+        item = parent[item]
+    return item
+
+
+def _union_parent(parent: dict[int, int], left: int, right: int) -> None:
+    left_root = _find_parent(parent, left)
+    right_root = _find_parent(parent, right)
+    if left_root != right_root:
+        parent[right_root] = left_root
 
 
 def _collapse_errors(arrays: dict[str, np.ndarray]) -> list[str]:
