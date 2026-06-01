@@ -119,3 +119,5 @@ required_notes:
 - Do not infer production readiness from the review figures.
 - Do not enter MVP-4C or any advanced feature branch without separate approval.
 - Do not run STC/APES or deep learning under this checklist.
+- Treat `geometry_alignment_gate_report.json` as a review gate only. A
+  `conditional_go` still requires human confirmation before any next branch.

@@ -50,6 +50,7 @@ controlled_time_frequency_sanity_allowed = false
 no_final_labels = true
 depth_level_refinement_gate = go
 geometry_aware_xsi_cast_alignment = review supplement only
+geometry_alignment_gate = conditional_go_review_only
 next_branch_requires_human_approval = true
 ```
 

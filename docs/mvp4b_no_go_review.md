@@ -316,6 +316,25 @@ refinement gate conclusion. It also does not authorize MVP-4C, STC, APES, deep
 learning, production modeling, final labels, or ground-truth claims for CAST
 weak-label candidates.
 
+The geometry alignment gate is a separate review gate. A conditional decision
+requires human confirmation of the depth-axis sign and DLR interval review
+deltas before any later target-review branch. It still leaves MVP-4C, STC,
+APES, deep learning, production modeling, and final labels blocked.
+
+Current MVP-4B-G gate result:
+
+```text
+geometry_alignment_gate = conditional_go
+best_geometry_review_mode = source_receiver_midpoint
+best_depth_axis_sign = -1
+source_receiver_interval_adoption_allowed = false
+depth_axis_sign_confirmation_required = true
+manual_review_revisit_required = true
+revisit_interval_count = 22
+```
+
+This does not approve a new target branch without human review.
+
 ## Recommended Decision
 
 Keep MVP-4B in `no_go`.

@@ -536,3 +536,9 @@ The geometry-aware manual review supplement must be written to a new
 `geometry_aware_manual_review_v001/` directory and must not overwrite the
 original depth-level manual review pack. Evidence category changes are prompts
 for human review only; they are not final labels.
+
+The geometry alignment gate must return `conditional_go` when the best
+geometry-aware mode improves over R7 but depth-axis sign or manual review
+deltas require human confirmation. It must return `no_go` for all-mode sample
+collapse, suspicious leakage, permutation failure, degenerate predicted
+positive rate, or 5700-band dependency.

@@ -2714,3 +2714,14 @@ geometry_aware_manual_review_v001/
 The supplement must include mode/sign comparison tables, interval-level
 geometry evidence deltas, review figures, and `review_decision_should_be_revisited`
 flags. It must not overwrite `depth_level_manual_review_v001/`.
+
+Stage 5 geometry alignment gate is run by:
+
+```bash
+python scripts/06ag_generate_geometry_alignment_gate.py --config configs/paths.local.yaml
+```
+
+The gate writes `geometry_alignment_gate_report.md/json`. A passing or
+conditional decision only supports human selection of a review target. It must
+keep MVP-4C, STC/APES, deep learning, production modeling, final labels, and
+ground-truth claims blocked.
