@@ -2804,3 +2804,27 @@ geometry_regression_audit_v001.csv
 
 If all kernels are unstable relative to permutation, the audit must stop and
 report that no MVP-4C/STC/APES/deep-learning/final-label step is allowed.
+
+The regression manual review supplement is run by:
+
+```bash
+python scripts/06aj_generate_geometry_regression_review.py --config configs/paths.local.yaml
+```
+
+It writes a new directory only:
+
+```text
+geometry_regression_manual_review_v001/
+```
+
+The supplement must show continuous channel fraction versus depth, kernel
+comparison, source/R7/receiver/midpoint schematic, raw-Zc heatmap,
+`Zc < 2.5` cell mask heatmap, relative-drop heatmap, weighted-fraction
+heatmap/trace, selected interval before/after comparison, 5700-band
+sensitivity, and old binary label versus new continuous target comparison. The
+review types are `high_fraction_interval`, `low_fraction_interval`,
+`local_only_anomaly`, `kernel_sensitive_interval`,
+`xsi_high_cast_fraction_low`, `xsi_low_cast_fraction_high`,
+`5700_band_review`, and `uncertainty_review`. This is a regression weak-label
+candidate review package only; it is not ground truth, not final labels, and
+does not approve MVP-4C/STC/APES/deep learning.

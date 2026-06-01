@@ -583,3 +583,10 @@ R7, it may be recommended as a next manual-review candidate. If the uniform
 interval target is overly concentrated, it remains audit-only. If every kernel
 is unstable or below permutation, the process stops and waits for manual
 review.
+
+The regression manual review supplement must prioritize continuous target
+inspection over binary support counts. It must include selected intervals for
+high fraction, low fraction, local-only anomaly, kernel-sensitive disagreement,
+XSI-high/CAST-low disagreement, XSI-low/CAST-high disagreement, 5700-band
+review, and uncertainty review. These intervals are prompts for human review
+only and must not be treated as final labels or approval to enter MVP-4C.

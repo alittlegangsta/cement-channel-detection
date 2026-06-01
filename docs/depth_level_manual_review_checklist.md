@@ -41,6 +41,20 @@ interval_geometry_comparison.csv
 interval_geometry_comparison.json
 ```
 
+Geometry-aware regression supplement, if present:
+
+```text
+/home/xiaoj/cement-channel-data/reports/geometry_regression_manual_review_v001/
+review_summary.md
+kernel_comparison.csv
+kernel_comparison.json
+interval_regression_target_summary.csv
+interval_regression_target_summary.json
+selected_interval_review_list.csv
+selected_interval_review_list.json
+figures/
+```
+
 ## Visualization Caveats
 
 - XSI raw features have very different physical scales. Use the raw small
@@ -55,9 +69,16 @@ interval_geometry_comparison.json
 - Geometry-aware CAST evidence may change because XSI represents a
   source-to-receiver interval response while CAST is local depth by azimuth
   evidence. Treat changed categories as review prompts, not final labels.
+- Geometry-aware regression targets are continuous weak-label candidates. Do
+  not collapse them back to final positive/negative decisions during review.
 - Review the geometry-aware supplement before approving any later
   interval-level target. Pay special attention to DLR intervals where
   `review_decision_should_be_revisited=true`.
+- Review the regression supplement intervals by type:
+  `high_fraction_interval`, `low_fraction_interval`, `local_only_anomaly`,
+  `kernel_sensitive_interval`, `xsi_high_cast_fraction_low`,
+  `xsi_low_cast_fraction_high`, `5700_band_review`, and
+  `uncertainty_review`.
 
 ## Interval Review Order
 
@@ -91,6 +112,12 @@ interval_geometry_comparison.json
    any later interval-level target review?
 10. Do any DLR intervals need re-review because source-receiver interval
     aggregation changes the CAST evidence category?
+11. Do continuous regression fractions look healthier than the old binary
+    any-cell aggregation?
+12. Which regression kernel, if any, should be used as the next manual-review
+    primary candidate?
+13. Which regression intervals from `selected_interval_review_list.csv` require
+    manual inspection before any further experiment?
 
 ## Review Decision Template
 
@@ -108,6 +135,9 @@ approve_controlled_depth_level_feature_refinement_v2: yes/no/conditional
 mvp4c_stc_apes_deep_learning_final_labels_still_blocked: yes/no
 depth_axis_sign_requires_confirmation: yes/no/uncertain
 dlr_intervals_requiring_geometry_re_review:
+regression_targets_healthier_than_old_binary: yes/no/uncertain
+regression_primary_kernel_candidate: r7_reference_point/midpoint_window/uniform_source_receiver_interval/triangular_midpoint_weighted/none/uncertain
+regression_intervals_requiring_review:
 
 required_notes:
 ```
