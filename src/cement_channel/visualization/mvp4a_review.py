@@ -288,7 +288,7 @@ def _save_severity_boxplot(
         for level in range(4)
     ]
     fig, ax = plt.subplots(figsize=(7, 5), constrained_layout=True)
-    ax.boxplot(groups, labels=["none", "mild", "moderate", "severe"], showfliers=False)
+    ax.boxplot(groups, tick_labels=["none", "mild", "moderate", "severe"], showfliers=False)
     ax.set_title("Severity vs Feature")
     ax.set_ylabel(feature_name)
     save_figure(fig, output_path, overwrite=overwrite)
@@ -314,7 +314,11 @@ def _save_high_confidence_comparison(
     candidate = _sample(values[valid_high & (presence == 1)], max_samples)
     non_candidate = _sample(values[valid_high & (presence == 0)], max_samples)
     fig, ax = plt.subplots(figsize=(6, 5), constrained_layout=True)
-    ax.boxplot([non_candidate, candidate], labels=["non-candidate", "candidate"], showfliers=False)
+    ax.boxplot(
+        [non_candidate, candidate],
+        tick_labels=["non-candidate", "candidate"],
+        showfliers=False,
+    )
     ax.set_title("High-Confidence-Only Comparison")
     ax.set_ylabel(feature_name)
     save_figure(fig, output_path, overwrite=overwrite)
