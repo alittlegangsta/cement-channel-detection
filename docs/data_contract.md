@@ -1456,6 +1456,54 @@ Receiver-level aggregation fields such as `receiver_candidate_fraction`,
 `receiver_cast_sample_count` must be preserved so interval aggregation can be
 audited before depth-level summaries.
 
+MVP-4B-GR replaces aggressive binary region aggregation with continuous
+geometry-aware regression weak-label candidates. The primary target is:
+
+```text
+weighted_channel_fraction_zc_lt_2p5
+```
+
+Each CAST cell is treated as a local observation:
+
+```text
+(depth, azimuth) -> raw Zc
+cell_channel_candidate = 1[raw_Zc < 2.5 MRayl]
+```
+
+For each XSI reference depth, receiver, and geometry kernel, the output must
+preserve continuous `[0, 1]` cell fractions and supporting statistics:
+
+```text
+raw_channel_fraction_zc_lt_2p5
+weighted_channel_fraction_zc_lt_2p5
+relative_anomaly_fraction
+combined_channel_fraction
+min_zc
+p05_zc
+p10_zc
+max_relative_drop
+candidate_cell_count
+total_cell_count
+largest_connected_component_fraction
+max_azimuth_channel_fraction
+depth_label_confidence
+geometry_kernel
+receiver_index
+reference_depth
+source_depth
+receiver_depth
+midpoint_depth
+interval_min_depth
+interval_max_depth
+```
+
+Depth-level views may summarize receiver targets as `receiver_mean`,
+`receiver_max`, `receiver_p90`, `receiver_std`, and `full_360_fraction`.
+Binary fields such as `derived_positive_at_fraction_0p01`,
+`derived_positive_at_fraction_0p05`, and
+`derived_positive_at_fraction_0p10` are sanity views only and must not be
+called final labels.
+
 MVP-4B-R4 depth-level XSI feature review may additionally produce:
 
 ```text

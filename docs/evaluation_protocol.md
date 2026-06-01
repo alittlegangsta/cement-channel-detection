@@ -547,3 +547,28 @@ geometry-aware mode improves over R7 but depth-axis sign or manual review
 deltas require human confirmation. It must return `no_go` for all-mode sample
 collapse, suspicious leakage, permutation failure, degenerate predicted
 positive rate, or 5700-band dependency.
+
+## MVP-4B-GR Continuous Regression Label Audit
+
+MVP-4B-GR regression labels are weak-label candidate targets, not ground truth.
+Evaluation must audit continuous target health before any downstream modeling.
+
+Required label-health checks:
+
+```text
+raw Zc source_file/source_field
+raw Zc finite ratio
+human-confirmed geometry sign = -1
+kernel target distribution
+zero fraction
+nonzero fraction
+mean / median / p90 / p95 / max
+derived binary support at 0.01 / 0.05 / 0.10 fraction thresholds
+sample-support collapse warning
+no_final_labels = true
+```
+
+Derived binary views may be used only as sanity summaries. They must not be
+reported as final labels or model-performance targets. A continuous target that
+collapses to a constant for every kernel is a stop condition requiring manual
+review before any further audit.

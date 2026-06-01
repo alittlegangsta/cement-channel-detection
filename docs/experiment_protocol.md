@@ -2731,3 +2731,52 @@ The gate writes `geometry_alignment_gate_report.md/json`. A passing or
 conditional decision only supports human selection of a review target. It must
 keep MVP-4C, STC/APES, deep learning, production modeling, final labels, and
 ground-truth claims blocked.
+
+## 33. MVP-4B-GR Geometry-Aware Regression Weak Labels
+
+MVP-4B-GR is a follow-up to the MVP-4B-G geometry audit. It redesigns the CAST
+target as a continuous regression weak-label candidate because binary "any
+cell in region" aggregation caused sample-support collapse. It does not
+authorize MVP-4C, STC/APES, deep learning, production modeling, or final labels.
+
+The primary target is a geometry-aware fraction of local CAST cells satisfying
+`raw_Zc < 2.5 MRayl`:
+
+```text
+weighted_channel_fraction_zc_lt_2p5
+```
+
+The allowed geometry kernels are:
+
+```text
+r7_reference_point
+midpoint_window
+uniform_source_receiver_interval
+triangular_midpoint_weighted
+```
+
+The script is:
+
+```bash
+python scripts/06ah_build_geometry_aware_regression_labels.py --config configs/paths.local.yaml
+```
+
+Inputs must be controlled NPZ intermediates only: raw CAST `Zc` from
+`cast_label_input_v001.npz` or an equivalent controlled raw-Zc NPZ, optional
+`relative_drop` from `cast_zc_baseline_v001.npz`, existing
+`depth_level_xsi_features_v001.npz`, and human-confirmed
+`configs/xsi_geometry.example.yaml`. The script must stop if raw `Zc` is not
+available and must never substitute `zc_ratio` for raw `Zc`.
+
+Outputs are review artifacts:
+
+```text
+geometry_aware_regression_labels_v001.npz
+geometry_aware_regression_labels_report_v001.md
+geometry_aware_regression_labels_report_v001.json
+```
+
+Reports must include raw-Zc availability, geometry sign status, kernel target
+distributions, zero/nonzero fractions, mean/median/p90/p95/max, and derived
+binary support at multiple fraction thresholds. Derived binary views are
+sanity-only and must not be called final labels.

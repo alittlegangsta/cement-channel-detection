@@ -1,0 +1,35 @@
+schema_version: schema_v001
+config_version: geometry_aware_regression_labels_v001
+
+labels:
+  primary_target: weighted_channel_fraction_zc_lt_2p5
+  zc_threshold_mrayl: 2.5
+  relative_drop_threshold: 0.35
+  zc_threshold_status: human_reviewed_candidate_v001
+  no_final_labels: true
+
+geometry_kernels:
+  - r7_reference_point
+  - midpoint_window
+  - uniform_source_receiver_interval
+  - triangular_midpoint_weighted
+
+midpoint_window_half_width_ft: 0.25
+interval_padding_ft: 0.0
+min_raw_zc_finite_ratio: 0.5
+
+derived_binary_views:
+  status: sanity_only_not_final_labels
+  thresholds:
+    - 0.01
+    - 0.05
+    - 0.10
+
+guardrails:
+  no_model_training: true
+  no_final_labels: true
+  no_stc: true
+  no_apes: true
+  no_deep_learning: true
+  no_mvp4c: true
+  no_ground_truth_claims: true
