@@ -590,3 +590,11 @@ high fraction, low fraction, local-only anomaly, kernel-sensitive disagreement,
 XSI-high/CAST-low disagreement, XSI-low/CAST-high disagreement, 5700-band
 review, and uncertainty review. These intervals are prompts for human review
 only and must not be treated as final labels or approval to enter MVP-4C.
+
+The regression gate may return `go`, `conditional_go`, or `no_go`, but all
+three decisions remain review-only. It must explicitly answer geometry sign,
+raw-Zc source control, kernel recommendation, audit-only kernels, continuous
+target health, remaining support collapse, required manual intervals, and the
+continued ban on MVP-4C/STC/APES/deep learning/final labels. `go` means the
+review package is adequate for human review; it does not authorize the next
+technical stage.

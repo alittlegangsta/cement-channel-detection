@@ -51,6 +51,7 @@ no_final_labels = true
 depth_level_refinement_gate = go
 geometry_aware_xsi_cast_alignment = review supplement only
 geometry_alignment_gate = conditional_go_review_only
+geometry_aware_regression_gate = review_only_waiting_for_human_review
 next_branch_requires_human_approval = true
 ```
 
@@ -70,6 +71,7 @@ controlled depth-level feature refinement v2
 depth-level manual review pack inspection
 interval-level target review
 geometry-aware XSI-CAST alignment review
+geometry-aware continuous regression weak-label review
 controlled time-frequency feasibility review
 ```
 

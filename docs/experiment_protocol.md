@@ -2828,3 +2828,25 @@ review types are `high_fraction_interval`, `low_fraction_interval`,
 `5700_band_review`, and `uncertainty_review`. This is a regression weak-label
 candidate review package only; it is not ground truth, not final labels, and
 does not approve MVP-4C/STC/APES/deep learning.
+
+The regression gate is run by:
+
+```bash
+python scripts/06ak_generate_geometry_regression_gate.py --config configs/paths.local.yaml
+```
+
+It writes:
+
+```text
+geometry_regression_gate_report.md
+geometry_regression_gate_report.json
+```
+
+The gate must answer whether human-confirmed geometry sign is fixed at `-1`,
+which kernel is the most reasonable manual-review candidate, which kernels are
+audit-only, whether continuous targets are healthier than the old binary target,
+whether manual review is required, which intervals must be inspected, whether
+raw `Zc` was correctly loaded from a controlled source, whether sample-support
+collapse remains, and whether MVP-4C/STC/APES/deep learning/final labels remain
+forbidden. Regardless of `go`, `conditional_go`, or `no_go`, the next step must
+wait for human review.

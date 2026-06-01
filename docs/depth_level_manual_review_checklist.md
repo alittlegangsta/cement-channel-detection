@@ -138,6 +138,8 @@ dlr_intervals_requiring_geometry_re_review:
 regression_targets_healthier_than_old_binary: yes/no/uncertain
 regression_primary_kernel_candidate: r7_reference_point/midpoint_window/uniform_source_receiver_interval/triangular_midpoint_weighted/none/uncertain
 regression_intervals_requiring_review:
+geometry_regression_gate_decision: go/conditional_go/no_go
+geometry_regression_gate_next_step_waits_for_human_review: yes/no
 
 required_notes:
 ```
@@ -151,3 +153,6 @@ required_notes:
 - Do not run STC/APES or deep learning under this checklist.
 - Treat `geometry_alignment_gate_report.json` as a review gate only. A
   `conditional_go` still requires human confirmation before any next branch.
+- Treat `geometry_regression_gate_report.json` as a review gate only. Any
+  decision still requires human confirmation before MVP-4C, STC/APES, deep
+  learning, production claims, or final labels.
