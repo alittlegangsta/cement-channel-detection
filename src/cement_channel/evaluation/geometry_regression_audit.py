@@ -21,8 +21,18 @@ DEFAULT_KERNELS = (
 @dataclass(frozen=True)
 class GeometryRegressionAuditConfig:
     target_field: str = "receiver_max"
+    target_formula: str = (
+        "receiver_max = max(weighted_channel_fraction_zc_lt_2p5 over 13 receivers) "
+        "for each geometry kernel and XSI reference depth"
+    )
+    target_selection_reason: str = (
+        "receiver_max preserves local receiver evidence for the sanity audit; "
+        "the receiver-level primary target remains weighted_channel_fraction_zc_lt_2p5."
+    )
     fold_count: int = 3
     permutation_repeats: int = 11
+    permutation_unit: str = "depth rows within each kernel target view"
+    cv_split_strategy: str = "depth-sorted contiguous block split"
     min_abs_spearman_margin: float = 0.03
     review_band_min_ft: float = 5680.0
     review_band_max_ft: float = 5720.0
@@ -35,6 +45,17 @@ class GeometryRegressionAuditReport:
     inputs: dict[str, str]
     output_csv: str
     target_field: str
+    audited_target_view: str
+    audited_target_formula: str
+    audited_target_selection_reason: str
+    permutation_margin_formula: str
+    permutation_seed_policy: str
+    permutation_unit: str
+    permutation_count: int
+    cv_split_strategy: str
+    cv_n_splits: int
+    cv_block_boundaries: list[dict[str, Any]]
+    feature_matrix: dict[str, Any]
     kernel_summaries: list[dict[str, Any]]
     kernel_sensitivity: list[dict[str, Any]]
     best_kernel: str | None
@@ -49,6 +70,7 @@ class GeometryRegressionAuditReport:
     no_apes: bool
     no_deep_learning: bool
     no_mvp4c: bool
+    no_silent_fallback: bool
     not_performed: list[str]
 
     def to_dict(self) -> dict[str, Any]:
@@ -63,6 +85,7 @@ def audit_geometry_regression_from_paths(
     output_report_md: Path | str,
     output_report_json: Path | str,
     output_csv: Path | str,
+    output_feature_correlation_csv: Path | str | None = None,
     overwrite: bool = False,
     config: GeometryRegressionAuditConfig | None = None,
 ) -> GeometryRegressionAuditReport:
@@ -85,6 +108,11 @@ def audit_geometry_regression_from_paths(
         output_md=Path(output_report_md),
         output_json=Path(output_report_json),
         output_csv=Path(output_csv),
+        output_feature_correlation_csv=(
+            None
+            if output_feature_correlation_csv is None
+            else Path(output_feature_correlation_csv)
+        ),
         overwrite=overwrite,
     )
     return report
@@ -114,6 +142,7 @@ def audit_geometry_regression(
     features = np.nan_to_num(features, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
     leakage_warnings = _feature_leakage_warnings(feature_names)
     warnings.extend(leakage_warnings)
+    cv_blocks = _cv_block_boundaries(depth, cfg.fold_count)
 
     rows: list[dict[str, Any]] = []
     summaries: list[dict[str, Any]] = []
@@ -146,6 +175,26 @@ def audit_geometry_regression(
         inputs=inputs or {},
         output_csv=str(output_csv) if output_csv else "",
         target_field=cfg.target_field,
+        audited_target_view=cfg.target_field,
+        audited_target_formula=cfg.target_formula,
+        audited_target_selection_reason=cfg.target_selection_reason,
+        permutation_margin_formula=(
+            "abs(top_abs_spearman) - mean(abs(permutation_spearman))"
+        ),
+        permutation_seed_policy=(
+            "stable per-kernel deterministic seed; Spearman permutation seed adds 41"
+        ),
+        permutation_unit=cfg.permutation_unit,
+        permutation_count=cfg.permutation_repeats,
+        cv_split_strategy=cfg.cv_split_strategy,
+        cv_n_splits=cfg.fold_count,
+        cv_block_boundaries=cv_blocks,
+        feature_matrix={
+            "source": "depth_level_xsi_features",
+            "shape": list(features.shape),
+            "feature_count": int(features.shape[1]) if features.ndim == 2 else 0,
+            "finite_row_fraction_before_nan_to_num": float(np.mean(finite_rows)),
+        },
         kernel_summaries=summaries,
         kernel_sensitivity=sensitivity,
         best_kernel=None if best is None else str(best["geometry_kernel"]),
@@ -160,6 +209,7 @@ def audit_geometry_regression(
         no_apes=True,
         no_deep_learning=True,
         no_mvp4c=True,
+        no_silent_fallback=True,
         not_performed=[
             "formal model training",
             "hyperparameter tuning",
@@ -183,20 +233,27 @@ def write_geometry_regression_audit_outputs(
     output_md: Path,
     output_json: Path,
     output_csv: Path,
+    output_feature_correlation_csv: Path | None = None,
     overwrite: bool,
 ) -> None:
     _ensure_can_write(output_md, overwrite=overwrite)
     _ensure_can_write(output_json, overwrite=overwrite)
     _ensure_can_write(output_csv, overwrite=overwrite)
+    if output_feature_correlation_csv is not None:
+        _ensure_can_write(output_feature_correlation_csv, overwrite=overwrite)
     output_md.parent.mkdir(parents=True, exist_ok=True)
     output_json.parent.mkdir(parents=True, exist_ok=True)
     output_csv.parent.mkdir(parents=True, exist_ok=True)
+    if output_feature_correlation_csv is not None:
+        output_feature_correlation_csv.parent.mkdir(parents=True, exist_ok=True)
     output_json.write_text(
         json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
     output_md.write_text(format_geometry_regression_audit_markdown(report), encoding="utf-8")
     _write_csv(rows, output_csv)
+    if output_feature_correlation_csv is not None:
+        _write_csv(rows, output_feature_correlation_csv)
 
 
 def format_geometry_regression_audit_markdown(report: GeometryRegressionAuditReport) -> str:
@@ -210,17 +267,38 @@ def format_geometry_regression_audit_markdown(report: GeometryRegressionAuditRep
         f"- recommendation: `{report.recommendation}`",
         f"- recommendation_reason: {report.recommendation_reason}",
         f"- best_kernel: `{report.best_kernel}`",
-        f"- target_field: `{report.target_field}`",
+        f"- audited_target_view: `{report.audited_target_view}`",
+        f"- audited_target_formula: {report.audited_target_formula}",
+        f"- audited_target_selection_reason: {report.audited_target_selection_reason}",
+        f"- permutation_margin_formula: `{report.permutation_margin_formula}`",
+        f"- permutation_seed_policy: {report.permutation_seed_policy}",
+        f"- permutation_unit: `{report.permutation_unit}`",
+        f"- permutation_count: `{report.permutation_count}`",
+        f"- cv_split_strategy: `{report.cv_split_strategy}`",
+        f"- cv_n_splits: `{report.cv_n_splits}`",
+        f"- feature_matrix: `{report.feature_matrix}`",
         f"- no_final_labels: `{report.no_final_labels}`",
         "",
-        "## Kernel Summaries",
+        "## CV Blocks",
         "",
     ]
+    lines.extend(_dict_message_lines(report.cv_block_boundaries))
+    lines.extend(
+        [
+            "",
+            "## Kernel Summaries",
+            "",
+        ]
+    )
     for row in report.kernel_summaries:
         lines.append(
             "- "
             f"{row['geometry_kernel']}: sample_count={row['sample_count']}, "
-            f"best_feature={row['best_feature_name']}, "
+            f"top_abs_spearman_feature={row['top_abs_spearman_feature']}, "
+            f"top_abs_spearman={row['top_abs_spearman']}, "
+            f"top_abs_pearson_feature={row['top_abs_pearson_feature']}, "
+            f"top_abs_pearson={row['top_abs_pearson']}, "
+            f"pearson_spearman_divergence_flag={row['pearson_spearman_divergence_flag']}, "
             f"spearman={row['spearman_correlation']}, "
             f"permutation_spearman={row['permutation_spearman_correlation']}, "
             f"margin={row['real_minus_permutation_margin']}, "
@@ -258,6 +336,8 @@ def _audit_kernel(
     base = {
         "geometry_kernel": kernel,
         "kernel_index": kernel_index,
+        "target_view": config.target_field,
+        "target_formula": config.target_formula,
         "sample_count": sample_count,
         "target_distribution": _numeric_distribution(target[selected]),
         "zero_fraction": _fraction(target[selected] <= 0.0),
@@ -276,10 +356,17 @@ def _audit_kernel(
                 "status": "skipped_constant_or_too_small",
                 "best_feature_name": None,
                 "best_feature_index": None,
+                "top_abs_pearson_feature": None,
+                "top_abs_pearson": None,
+                "top_abs_spearman_feature": None,
+                "top_abs_spearman": None,
+                "pearson_spearman_divergence_flag": False,
                 "spearman_correlation": None,
                 "pearson_correlation": None,
                 "permutation_spearman_correlation": None,
                 "permutation_probe_r2": None,
+                "permutation_seed": None,
+                "permutation_count": config.permutation_repeats,
                 "real_minus_permutation_margin": None,
                 "simple_linear_sanity_probe": {},
                 "cross_validated_mae": None,
@@ -291,36 +378,49 @@ def _audit_kernel(
         )
     feature_rows = _feature_correlation_rows(
         kernel=kernel,
+        target_view=config.target_field,
         features=features[selected],
         feature_names=feature_names,
         target=target[selected],
     )
-    best = max(feature_rows, key=lambda row: abs(float(row["spearman_correlation"] or 0.0)))
+    best_spearman = min(feature_rows, key=lambda row: int(row["abs_spearman_rank"]))
+    best_pearson = min(feature_rows, key=lambda row: int(row["abs_pearson_rank"]))
+    seed = _stable_seed(kernel)
     probe = _linear_probe_with_permutation(
         features=features[selected],
         target=target[selected],
         depth=depth[selected],
         config=config,
-        seed=_stable_seed(kernel),
+        seed=seed,
     )
     permutation_spearman = _permutation_spearman(
-        values=features[selected, int(best["feature_index"])],
+        values=features[selected, int(best_spearman["feature_index"])],
         target=target[selected],
         repeats=config.permutation_repeats,
-        seed=_stable_seed(kernel) + 41,
+        seed=seed + 41,
     )
-    spearman = _as_float(best["spearman_correlation"])
+    spearman = _as_float(best_spearman["spearman_correlation"])
     margin = None if spearman is None else abs(spearman) - abs(permutation_spearman)
     return (
         {
             **base,
             "status": "runnable",
-            "best_feature_name": best["feature_name"],
-            "best_feature_index": int(best["feature_index"]),
+            "best_feature_name": best_spearman["feature_name"],
+            "best_feature_index": int(best_spearman["feature_index"]),
+            "top_abs_pearson_feature": best_pearson["feature_name"],
+            "top_abs_pearson": _abs_or_none(best_pearson["pearson_correlation"]),
+            "top_abs_spearman_feature": best_spearman["feature_name"],
+            "top_abs_spearman": _abs_or_none(best_spearman["spearman_correlation"]),
+            "pearson_spearman_divergence_flag": bool(
+                best_pearson["pearson_spearman_divergence_flag"]
+                or best_spearman["pearson_spearman_divergence_flag"]
+            ),
             "spearman_correlation": spearman,
-            "pearson_correlation": _as_float(best["pearson_correlation"]),
+            "pearson_correlation": _as_float(best_spearman["pearson_correlation"]),
             "permutation_spearman_correlation": permutation_spearman,
             "permutation_probe_r2": probe["permutation_r2"],
+            "permutation_seed": seed,
+            "permutation_count": config.permutation_repeats,
             "real_minus_permutation_margin": margin,
             "simple_linear_sanity_probe": probe,
             "cross_validated_mae": probe["mae"],
@@ -335,6 +435,7 @@ def _audit_kernel(
 def _feature_correlation_rows(
     *,
     kernel: str,
+    target_view: str,
     features: np.ndarray,
     feature_names: np.ndarray,
     target: np.ndarray,
@@ -342,15 +443,32 @@ def _feature_correlation_rows(
     rows: list[dict[str, Any]] = []
     for index, name in enumerate(feature_names.astype(str)):
         values = features[:, index]
+        pearson = _pearson(values, target)
+        spearman = _spearman(values, target)
         rows.append(
             {
                 "geometry_kernel": kernel,
+                "target_view": target_view,
                 "feature_index": index,
                 "feature_name": name,
-                "pearson_correlation": _pearson(values, target),
-                "spearman_correlation": _spearman(values, target),
+                "pearson_correlation": pearson,
+                "spearman_correlation": spearman,
             }
         )
+    pearson_order = sorted(
+        range(len(rows)),
+        key=lambda item: _rank_key(rows[item]["pearson_correlation"]),
+    )
+    spearman_order = sorted(
+        range(len(rows)),
+        key=lambda item: _rank_key(rows[item]["spearman_correlation"]),
+    )
+    for rank, row_index in enumerate(pearson_order, start=1):
+        rows[row_index]["abs_pearson_rank"] = rank
+    for rank, row_index in enumerate(spearman_order, start=1):
+        rows[row_index]["abs_spearman_rank"] = rank
+    for row in rows:
+        row["pearson_spearman_divergence_flag"] = _pearson_spearman_divergence(row)
     return rows
 
 
@@ -426,8 +544,17 @@ def _cross_validated_linear_predictions(
     splits = np.array_split(order, fold_count)
     for fold_index, test_index in enumerate(splits):
         train_index = np.setdiff1d(np.arange(target.size), test_index, assume_unique=False)
+        base_fold = {
+            "fold": fold_index,
+            "train_count": int(train_index.size),
+            "validation_count": int(test_index.size),
+            "validation_depth_min": _finite_min(depth[test_index]),
+            "validation_depth_max": _finite_max(depth[test_index]),
+            "target_mean": _finite_mean(target[test_index]),
+            "target_zero_fraction": _fraction(target[test_index] <= 0.0),
+        }
         if test_index.size == 0 or train_index.size < 2:
-            fold_metrics.append({"fold": fold_index, "mae": None, "r2": None})
+            fold_metrics.append({**base_fold, "mae": None, "r2": None})
             continue
         train_x, test_x = _standardize_train_test(features[train_index], features[test_index])
         train_design = np.column_stack([np.ones(train_x.shape[0]), train_x])
@@ -436,7 +563,7 @@ def _cross_validated_linear_predictions(
         prediction[test_index] = test_design @ coef
         fold_metrics.append(
             {
-                "fold": fold_index,
+                **base_fold,
                 "mae": _mae(target[test_index], prediction[test_index]),
                 "r2": _r2(target[test_index], prediction[test_index]),
             }
@@ -469,6 +596,8 @@ def _kernel_sensitivity(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]
         rows.append(
             {
                 "geometry_kernel": summary["geometry_kernel"],
+                "target_view": summary.get("target_view", "receiver_max"),
+                "nonzero_fraction_formula": "fraction(audited_target_view > 0)",
                 "margin_delta_vs_r7": (
                     None if margin is None or r7_margin is None else margin - r7_margin
                 ),
@@ -590,6 +719,35 @@ def _rank(values: np.ndarray) -> np.ndarray:
     return ranks
 
 
+def _rank_key(value: Any) -> float:
+    number = _as_float(value)
+    return 1e9 if number is None else -abs(number)
+
+
+def _abs_or_none(value: Any) -> float | None:
+    number = _as_float(value)
+    return None if number is None else abs(number)
+
+
+def _pearson_spearman_divergence(row: dict[str, Any]) -> bool:
+    pearson = _abs_or_none(row.get("pearson_correlation"))
+    spearman = _abs_or_none(row.get("spearman_correlation"))
+    if pearson is None or spearman is None:
+        return False
+    name = str(row.get("feature_name", ""))
+    near_far_sensitive = name == "near_far_ratio_mean_early_energy"
+    high_pearson_low_spearman = pearson >= 0.10 and spearman <= 0.05
+    rank_divergence = (
+        int(row.get("abs_pearson_rank", 10**6)) <= 10
+        and int(row.get("abs_spearman_rank", 0)) >= 25
+    )
+    return bool(
+        high_pearson_low_spearman
+        or (pearson - spearman >= 0.15)
+        or (near_far_sensitive and (high_pearson_low_spearman or rank_divergence))
+    )
+
+
 def _mae(target: np.ndarray, prediction: np.ndarray) -> float | None:
     finite = np.isfinite(target) & np.isfinite(prediction)
     if not np.any(finite):
@@ -616,6 +774,7 @@ def _numeric_distribution(values: np.ndarray) -> dict[str, float | None]:
         return {
             "mean": None,
             "median": None,
+            "p75": None,
             "p90": None,
             "p95": None,
             "max": None,
@@ -623,10 +782,29 @@ def _numeric_distribution(values: np.ndarray) -> dict[str, float | None]:
     return {
         "mean": float(np.mean(finite)),
         "median": float(np.median(finite)),
+        "p75": float(np.percentile(finite, 75.0)),
         "p90": float(np.percentile(finite, 90.0)),
         "p95": float(np.percentile(finite, 95.0)),
         "max": float(np.max(finite)),
     }
+
+
+def _finite_min(values: np.ndarray) -> float | None:
+    finite = np.asarray(values, dtype=np.float64)
+    finite = finite[np.isfinite(finite)]
+    return None if finite.size == 0 else float(np.min(finite))
+
+
+def _finite_max(values: np.ndarray) -> float | None:
+    finite = np.asarray(values, dtype=np.float64)
+    finite = finite[np.isfinite(finite)]
+    return None if finite.size == 0 else float(np.max(finite))
+
+
+def _finite_mean(values: np.ndarray) -> float | None:
+    finite = np.asarray(values, dtype=np.float64)
+    finite = finite[np.isfinite(finite)]
+    return None if finite.size == 0 else float(np.mean(finite))
 
 
 def _depends_on_review_band(
@@ -640,6 +818,21 @@ def _depends_on_review_band(
         return False
     review = (depth >= config.review_band_min_ft) & (depth <= config.review_band_max_ft)
     return bool(np.count_nonzero(positive & review) / positive_count > 0.5)
+
+
+def _cv_block_boundaries(depth: np.ndarray, fold_count: int) -> list[dict[str, Any]]:
+    order = np.argsort(depth)
+    rows = []
+    for fold_index, test_index in enumerate(np.array_split(order, fold_count)):
+        rows.append(
+            {
+                "fold": fold_index,
+                "validation_count": int(test_index.size),
+                "validation_depth_min": _finite_min(depth[test_index]),
+                "validation_depth_max": _finite_max(depth[test_index]),
+            }
+        )
+    return rows
 
 
 def _validate_guardrails(
@@ -676,16 +869,34 @@ def _feature_leakage_warnings(feature_names: np.ndarray) -> list[str]:
 def _write_csv(rows: list[dict[str, Any]], output_csv: Path) -> None:
     fieldnames = [
         "geometry_kernel",
+        "target_view",
         "feature_index",
         "feature_name",
-        "pearson_correlation",
-        "spearman_correlation",
+        "pearson",
+        "spearman",
+        "abs_pearson_rank",
+        "abs_spearman_rank",
+        "pearson_spearman_divergence_flag",
     ]
     with output_csv.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
-            writer.writerow({key: row.get(key) for key in fieldnames})
+            writer.writerow(
+                {
+                    "geometry_kernel": row.get("geometry_kernel"),
+                    "target_view": row.get("target_view"),
+                    "feature_index": row.get("feature_index"),
+                    "feature_name": row.get("feature_name"),
+                    "pearson": row.get("pearson_correlation"),
+                    "spearman": row.get("spearman_correlation"),
+                    "abs_pearson_rank": row.get("abs_pearson_rank"),
+                    "abs_spearman_rank": row.get("abs_spearman_rank"),
+                    "pearson_spearman_divergence_flag": row.get(
+                        "pearson_spearman_divergence_flag"
+                    ),
+                }
+            )
 
 
 def _fraction(mask: np.ndarray) -> float | None:

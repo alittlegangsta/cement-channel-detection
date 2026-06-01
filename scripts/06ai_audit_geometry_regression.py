@@ -40,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-report-md", default=None)
     parser.add_argument("--output-report-json", default=None)
     parser.add_argument("--output-csv", default=None)
+    parser.add_argument("--output-feature-correlation-csv", default=None)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
@@ -74,11 +75,17 @@ def main() -> int:
             args.output_csv,
             "geometry_regression_audit_v001.csv",
         )
+        output_feature_csv = _resolve_report_path(
+            paths,
+            args.output_feature_correlation_csv,
+            "geometry_regression_feature_correlation_summary_v001.csv",
+        )
         _ensure_path_within(paths, labels_npz, key="interim", action="read")
         _ensure_path_within(paths, features_npz, key="interim", action="read")
         _ensure_path_within(paths, output_md, key="reports", action="write")
         _ensure_path_within(paths, output_json, key="reports", action="write")
         _ensure_path_within(paths, output_csv, key="reports", action="write")
+        _ensure_path_within(paths, output_feature_csv, key="reports", action="write")
         if args.dry_run:
             import numpy as np  # noqa: PLC0415
 
@@ -104,6 +111,7 @@ def main() -> int:
                 output_report_md=output_md,
                 output_report_json=output_json,
                 output_csv=output_csv,
+                output_feature_correlation_csv=output_feature_csv,
                 overwrite=args.overwrite,
             )
     except (
@@ -132,6 +140,7 @@ def main() -> int:
         print(f"Wrote Markdown report: {output_md}")
         print(f"Wrote JSON report: {output_json}")
         print(f"Wrote CSV: {output_csv}")
+        print(f"Wrote feature correlation CSV: {output_feature_csv}")
     return 1 if report.errors else 0
 
 

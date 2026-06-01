@@ -24,6 +24,62 @@ REGRESSION_KERNELS = (
     "triangular_midpoint_weighted",
 )
 
+DEPTH_LEVEL_TARGET_VIEWS = (
+    "receiver_mean",
+    "receiver_max",
+    "receiver_p90",
+    "receiver_std",
+    "full_360_fraction",
+)
+
+TARGET_VIEW_DEFINITIONS = {
+    "weighted_channel_fraction_zc_lt_2p5": (
+        "Receiver-level primary target: weighted fraction of finite CAST cells in "
+        "the receiver/kernel geometry region with raw Zc < 2.5 MRayl."
+    ),
+    "raw_channel_fraction_zc_lt_2p5": (
+        "Receiver-level unweighted fraction of finite CAST cells in the "
+        "receiver/kernel geometry region with raw Zc < 2.5 MRayl."
+    ),
+    "relative_anomaly_fraction": (
+        "Receiver-level fraction of finite CAST cells satisfying the configured "
+        "relative-drop anomaly threshold."
+    ),
+    "combined_channel_fraction": (
+        "Receiver-level fraction of finite CAST cells satisfying raw-Zc or "
+        "relative-drop candidate rules."
+    ),
+    "receiver_mean": (
+        "Depth-level view: mean of the receiver-level primary target across the "
+        "13 receivers for each XSI reference depth."
+    ),
+    "receiver_max": (
+        "Depth-level view: maximum of the receiver-level primary target across "
+        "the 13 receivers for each XSI reference depth."
+    ),
+    "receiver_p90": (
+        "Depth-level view: 90th percentile of the receiver-level primary target "
+        "across the 13 receivers for each XSI reference depth."
+    ),
+    "receiver_std": (
+        "Depth-level view: standard deviation of the receiver-level primary "
+        "target across the 13 receivers for each XSI reference depth."
+    ),
+    "full_360_fraction": (
+        "Depth-level view: combined-channel cell fraction over the full "
+        "source/receiver geometry depth span for all azimuths."
+    ),
+    "derived_positive_at_fraction_0p01": (
+        "Derived binary sanity view only: receiver_max >= 0.01. Not a final label."
+    ),
+    "derived_positive_at_fraction_0p05": (
+        "Derived binary sanity view only: receiver_max >= 0.05. Not a final label."
+    ),
+    "derived_positive_at_fraction_0p10": (
+        "Derived binary sanity view only: receiver_max >= 0.10. Not a final label."
+    ),
+}
+
 
 @dataclass(frozen=True)
 class GeometryAwareRegressionConfig:
@@ -50,7 +106,11 @@ class GeometryAwareRegressionLabelReport:
     raw_zc_available: bool
     raw_zc_source: dict[str, Any]
     geometry_sign_status: dict[str, Any]
+    primary_target_layer: str
+    depth_level_target_views: list[str]
+    target_view_definitions: dict[str, str]
     kernel_summaries: list[dict[str, Any]]
+    target_view_summaries: list[dict[str, Any]]
     warnings: list[str]
     errors: list[str]
     no_model_training: bool
@@ -252,11 +312,16 @@ def format_geometry_aware_regression_markdown(
         "",
         f"- label_version: `{report.label_version}`",
         f"- primary_target: `{report.primary_target}`",
+        f"- primary_target_layer: `{report.primary_target_layer}`",
         f"- raw_zc_available: `{report.raw_zc_available}`",
         f"- geometry_sign_status: `{report.geometry_sign_status}`",
         f"- no_final_labels: `{report.no_final_labels}`",
         "",
-        "## Kernel Target Distributions",
+        "## Receiver-Level Primary Target",
+        "",
+        "These rows summarize `weighted_channel_fraction_zc_lt_2p5` at the "
+        "receiver level with shape `[kernel, depth, receiver]`. They are not "
+        "the depth-level audit view used by Stage 10 unless explicitly aggregated.",
         "",
     ]
     for summary in report.kernel_summaries:
@@ -266,11 +331,31 @@ def format_geometry_aware_regression_markdown(
             f"nonzero={summary['nonzero_fraction']}, "
             f"mean={summary['distribution']['mean']}, "
             f"median={summary['distribution']['median']}, "
+            f"p75={summary['distribution']['p75']}, "
             f"p90={summary['distribution']['p90']}, "
             f"p95={summary['distribution']['p95']}, "
-            f"max={summary['distribution']['max']}, "
-            f"derived={summary['derived_binary_support']}"
+            f"max={summary['distribution']['max']}"
         )
+    by_view = _summaries_by_view(report.target_view_summaries)
+    for view in report.depth_level_target_views:
+        lines.extend(["", f"## Depth-Level View: {view}", ""])
+        lines.append(report.target_view_definitions.get(view, "No definition recorded."))
+        lines.append("")
+        for summary in by_view.get(view, []):
+            lines.append(
+                "- "
+                f"{summary['geometry_kernel']}: zero={summary['zero_fraction']}, "
+                f"nonzero={summary['nonzero_fraction']}, "
+                f"mean={summary['distribution']['mean']}, "
+                f"median={summary['distribution']['median']}, "
+                f"p75={summary['distribution']['p75']}, "
+                f"p90={summary['distribution']['p90']}, "
+                f"p95={summary['distribution']['p95']}, "
+                f"max={summary['distribution']['max']}, "
+                f"fraction_gt_0p01={summary['fraction_gt_threshold']['0p01']}, "
+                f"fraction_gt_0p05={summary['fraction_gt_threshold']['0p05']}, "
+                f"fraction_gt_0p10={summary['fraction_gt_threshold']['0p10']}"
+            )
     lines.extend(["", "## Raw Zc Source", ""])
     lines.extend(_dict_lines(report.raw_zc_source))
     lines.extend(["", "## Warnings", ""])
@@ -698,36 +783,15 @@ def _build_report(
     warnings: list[str],
     errors: list[str],
 ) -> GeometryAwareRegressionLabelReport:
-    summaries = []
-    for index, kernel in enumerate(arrays["geometry_kernel"].astype(str)):
-        target = arrays["weighted_channel_fraction_zc_lt_2p5"][index]
-        summaries.append(
-            {
-                "geometry_kernel": kernel,
-                "sample_count": int(target.size),
-                "zero_fraction": _fraction_values(target <= 0.0),
-                "nonzero_fraction": _fraction_values(target > 0.0),
-                "distribution": _numeric_distribution(target),
-                "derived_binary_support": {
-                    key.replace("derived_positive_at_fraction_", ""): _fraction_values(
-                        arrays[key][index]
-                    )
-                    for key in sorted(arrays)
-                    if key.startswith("derived_positive_at_fraction_")
-                },
-                "candidate_cell_count": int(np.sum(arrays["candidate_cell_count"][index])),
-                "total_cell_count": int(np.sum(arrays["total_cell_count"][index])),
-            }
-        )
-    return GeometryAwareRegressionLabelReport(
-        report_version=GEOMETRY_AWARE_REGRESSION_REPORT_VERSION,
-        label_version=GEOMETRY_AWARE_REGRESSION_LABEL_VERSION,
-        generated_at=datetime.now(timezone.utc).isoformat(),
-        inputs=inputs,
-        output_npz=str(output_npz) if output_npz else "",
+    summaries = _receiver_level_primary_summaries(arrays)
+    target_view_summaries = _target_view_summaries(
+        arrays,
+        thresholds=config.derived_positive_thresholds,
+    )
+    raw_source_dict = raw_source.report.to_dict()
+    return _report_from_summaries(
         primary_target=config.primary_target,
-        raw_zc_available=True,
-        raw_zc_source=raw_source.report.to_dict(),
+        raw_zc_source=raw_source_dict,
         geometry_sign_status={
             "depth_axis_sign": -1,
             "sign_convention_status": geometry.sign_convention_status,
@@ -738,7 +802,138 @@ def _build_report(
             "relbearing_plus_minus_independent": True,
         },
         kernel_summaries=summaries,
+        target_view_summaries=target_view_summaries,
+        inputs=inputs,
+        output_npz=output_npz,
         warnings=[*raw_source.report.warnings, *warnings],
+        errors=errors,
+    )
+
+
+def build_geometry_aware_regression_label_report_from_arrays(
+    *,
+    arrays: dict[str, np.ndarray],
+    previous_report: dict[str, Any] | None = None,
+    inputs: dict[str, str] | None = None,
+    output_npz: Path | None = None,
+    thresholds: Sequence[float] = (0.01, 0.05, 0.10),
+) -> GeometryAwareRegressionLabelReport:
+    previous = previous_report or {}
+    raw_source = _as_dict(previous.get("raw_zc_source"))
+    if not raw_source:
+        raw_source = {
+            "source_file": _scalar_string(arrays.get("raw_zc_source_file")),
+            "source_field": _scalar_string(arrays.get("raw_zc_source_field")),
+            "finite_ratio": _scalar_float(arrays.get("raw_zc_finite_ratio")),
+        }
+    geometry_sign = _as_dict(previous.get("geometry_sign_status"))
+    if not geometry_sign:
+        geometry_sign = {
+            "depth_axis_sign": int(np.asarray(arrays.get("depth_axis_sign", -1))),
+            "sign_convention_status": _scalar_string(
+                arrays.get("sign_convention_status"),
+                default="human_confirmed",
+            ),
+            "relbearing_plus_minus_independent": True,
+        }
+    return _report_from_summaries(
+        primary_target=_scalar_string(
+            arrays.get("primary_target"),
+            default="weighted_channel_fraction_zc_lt_2p5",
+        ),
+        raw_zc_source=raw_source,
+        geometry_sign_status=geometry_sign,
+        kernel_summaries=_receiver_level_primary_summaries(arrays),
+        target_view_summaries=_target_view_summaries(arrays, thresholds=thresholds),
+        inputs=inputs or _as_dict(previous.get("inputs")),
+        output_npz=output_npz or Path(str(previous.get("output_npz", ""))),
+        warnings=list(previous.get("warnings", [])),
+        errors=list(previous.get("errors", [])),
+    )
+
+
+def _receiver_level_primary_summaries(
+    arrays: dict[str, np.ndarray],
+) -> list[dict[str, Any]]:
+    summaries = []
+    for index, kernel in enumerate(arrays["geometry_kernel"].astype(str)):
+        target = arrays["weighted_channel_fraction_zc_lt_2p5"][index]
+        summaries.append(
+            {
+                "geometry_kernel": kernel,
+                "target_view": "weighted_channel_fraction_zc_lt_2p5",
+                "semantic_layer": "receiver-level",
+                "shape": list(target.shape),
+                "sample_count": int(target.size),
+                "zero_fraction": _fraction_values(target <= 0.0),
+                "nonzero_fraction": _fraction_values(target > 0.0),
+                "distribution": _numeric_distribution(target),
+                "candidate_cell_count": int(np.sum(arrays["candidate_cell_count"][index])),
+                "total_cell_count": int(np.sum(arrays["total_cell_count"][index])),
+            }
+        )
+    return summaries
+
+
+def _target_view_summaries(
+    arrays: dict[str, np.ndarray],
+    *,
+    thresholds: Sequence[float],
+) -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
+    for view in DEPTH_LEVEL_TARGET_VIEWS:
+        if view not in arrays:
+            continue
+        values_by_kernel = np.asarray(arrays[view], dtype=np.float32)
+        for index, kernel in enumerate(arrays["geometry_kernel"].astype(str)):
+            target = values_by_kernel[index]
+            summaries.append(
+                {
+                    "geometry_kernel": kernel,
+                    "target_view": view,
+                    "semantic_layer": "depth-level",
+                    "shape": list(target.shape),
+                    "sample_count": int(target.size),
+                    "zero_fraction": _fraction_values(target <= 0.0),
+                    "nonzero_fraction": _fraction_values(target > 0.0),
+                    "distribution": _numeric_distribution(target),
+                    "fraction_gt_threshold": {
+                        _threshold_key(threshold): _fraction_values(target > threshold)
+                        for threshold in thresholds
+                    },
+                }
+            )
+    return summaries
+
+
+def _report_from_summaries(
+    *,
+    primary_target: str,
+    raw_zc_source: dict[str, Any],
+    geometry_sign_status: dict[str, Any],
+    kernel_summaries: list[dict[str, Any]],
+    target_view_summaries: list[dict[str, Any]],
+    inputs: dict[str, str],
+    output_npz: Path | None,
+    warnings: list[str],
+    errors: list[str],
+) -> GeometryAwareRegressionLabelReport:
+    return GeometryAwareRegressionLabelReport(
+        report_version=GEOMETRY_AWARE_REGRESSION_REPORT_VERSION,
+        label_version=GEOMETRY_AWARE_REGRESSION_LABEL_VERSION,
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        inputs=inputs,
+        output_npz=str(output_npz) if output_npz else "",
+        primary_target=primary_target,
+        raw_zc_available=True,
+        raw_zc_source=raw_zc_source,
+        geometry_sign_status=geometry_sign_status,
+        primary_target_layer="receiver-level",
+        depth_level_target_views=list(DEPTH_LEVEL_TARGET_VIEWS),
+        target_view_definitions=dict(TARGET_VIEW_DEFINITIONS),
+        kernel_summaries=kernel_summaries,
+        target_view_summaries=target_view_summaries,
+        warnings=warnings,
         errors=errors,
         no_model_training=True,
         no_final_labels=True,
@@ -906,10 +1101,18 @@ def _numeric_distribution(values: np.ndarray) -> dict[str, float | None]:
     finite = np.asarray(values, dtype=np.float64).reshape(-1)
     finite = finite[np.isfinite(finite)]
     if finite.size == 0:
-        return {"mean": None, "median": None, "p90": None, "p95": None, "max": None}
+        return {
+            "mean": None,
+            "median": None,
+            "p75": None,
+            "p90": None,
+            "p95": None,
+            "max": None,
+        }
     return {
         "mean": float(np.mean(finite)),
         "median": float(np.median(finite)),
+        "p75": float(np.percentile(finite, 75.0)),
         "p90": float(np.percentile(finite, 90.0)),
         "p95": float(np.percentile(finite, 95.0)),
         "max": float(np.max(finite)),
@@ -919,6 +1122,36 @@ def _numeric_distribution(values: np.ndarray) -> dict[str, float | None]:
 def _fraction_values(mask: np.ndarray) -> float | None:
     values = np.asarray(mask, dtype=bool).reshape(-1)
     return None if values.size == 0 else float(np.mean(values))
+
+
+def _threshold_key(threshold: float) -> str:
+    return f"{threshold:.2f}".replace("0.", "0p")
+
+
+def _summaries_by_view(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(str(row.get("target_view")), []).append(row)
+    return grouped
+
+
+def _scalar_string(value: Any, *, default: str = "") -> str:
+    if value is None:
+        return default
+    array = np.asarray(value)
+    if array.shape == ():
+        return str(array.item())
+    return str(array.reshape(-1)[0]) if array.size else default
+
+
+def _scalar_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    array = np.asarray(value, dtype=np.float64)
+    if array.size == 0:
+        return None
+    result = float(array.reshape(-1)[0])
+    return result if np.isfinite(result) else None
 
 
 def _dict_lines(values: dict[str, Any]) -> list[str]:

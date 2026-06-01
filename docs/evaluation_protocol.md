@@ -584,6 +584,32 @@ interval target is overly concentrated, it remains audit-only. If every kernel
 is unstable or below permutation, the process stops and waits for manual
 review.
 
+The audit must distinguish the receiver-level primary weak target from the
+audited depth-level view. The default audited view is:
+
+```text
+receiver_max = max(weighted_channel_fraction_zc_lt_2p5 over R1-R13)
+```
+
+All kernel sensitivity deltas must use the same named audited target view.
+Regression permutation margin is defined as:
+
+```text
+abs(top_abs_spearman) - mean(abs(permutation_spearman))
+```
+
+It must not be compared to or named like the MVP-4B classification
+balanced-accuracy margin. Reports must separately show top absolute Pearson
+and top absolute Spearman features and flag Pearson/Spearman divergence without
+speculating on its physical cause.
+
+Contract QA must pass before bounded root-cause triage. Required invariant
+classes include finite `[0, 1]` target values, depth count alignment, monotonic
+threshold fractions, Stage 9 report/NPZ consistency, explicit Stage 10 target
+view/formula/protocol fields, and no silent fallback. Passing contract QA does
+not authorize MVP-4C, STC/APES, deep learning, final labels, or production
+claims.
+
 The regression manual review supplement must prioritize continuous target
 inspection over binary support counts. It must include selected intervals for
 high fraction, low fraction, local-only anomaly, kernel-sensitive disagreement,

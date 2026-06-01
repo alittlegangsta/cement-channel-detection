@@ -2781,6 +2781,13 @@ distributions, zero/nonzero fractions, mean/median/p90/p95/max, and derived
 binary support at multiple fraction thresholds. Derived binary views are
 sanity-only and must not be called final labels.
 
+Stage 9 report summaries must identify their target view. The receiver-level
+primary target distribution is `weighted_channel_fraction_zc_lt_2p5` with shape
+`[kernel, depth, receiver]`. Depth-level report sections must separately cover
+`receiver_mean`, `receiver_max`, `receiver_p90`, `receiver_std`, and
+`full_360_fraction`. Threshold fractions in these sections are per-view sanity
+summaries and are not final binary labels.
+
 The regression alignment audit is run by:
 
 ```bash
@@ -2800,10 +2807,33 @@ The audit writes:
 geometry_regression_audit_v001.md
 geometry_regression_audit_v001.json
 geometry_regression_audit_v001.csv
+geometry_regression_feature_correlation_summary_v001.csv
 ```
 
 If all kernels are unstable relative to permutation, the audit must stop and
 report that no MVP-4C/STC/APES/deep-learning/final-label step is allowed.
+The audit must explicitly record `audited_target_view`,
+`audited_target_formula`, `audited_target_selection_reason`,
+`permutation_margin_formula`, permutation seed/unit/count, CV split strategy,
+CV block boundaries, top absolute Pearson feature, top absolute Spearman
+feature, and any Pearson/Spearman divergence flags. The permutation margin for
+this regression sanity audit is:
+
+```text
+abs(top_abs_spearman) - mean(abs(permutation_spearman))
+```
+
+It is not the MVP-4B classification balanced-accuracy margin.
+
+Bounded QA may be run after a stop result to clarify contract/report issues:
+
+```bash
+python scripts/06al_generate_geometry_regression_contract_qa.py --config configs/paths.local.yaml
+```
+
+It writes contract inventory/invariant reports and may refresh Stage 9 report
+formatting from the existing label NPZ without recomputing labels. It must not
+change geometry sign, thresholds, kernels, features, or label semantics.
 
 The regression manual review supplement is run by:
 

@@ -1504,6 +1504,29 @@ Binary fields such as `derived_positive_at_fraction_0p01`,
 `derived_positive_at_fraction_0p10` are sanity views only and must not be
 called final labels.
 
+For MVP-4B-GR reports, `weighted_channel_fraction_zc_lt_2p5` is the
+receiver-level primary target with shape `[kernel, depth, receiver]`.
+Depth-level audit views are explicit aggregations of that receiver-level target.
+In particular, `receiver_max` means the maximum receiver-level
+`weighted_channel_fraction_zc_lt_2p5` across R1-R13 for a given kernel and XSI
+reference depth. Stage 10 audits must name the audited target view and formula
+explicitly; the default audited view is `receiver_max`, not a silent replacement
+of the receiver-level primary target.
+
+QA reports may additionally write:
+
+```text
+geometry_regression_contract_inventory_v001.md/json
+geometry_regression_contract_invariants_v001.md/json
+geometry_regression_feature_correlation_summary_v001.csv
+geometry_regression_bounded_triage_v001.md/json/csv
+geometry_regression_qa_iteration_log.md
+```
+
+These are contract and root-cause review artifacts only. They must not change
+the geometry sign, raw-Zc threshold, target semantics, kernels, features, final
+label status, or MVP-4C/STC/APES/deep-learning prohibitions.
+
 MVP-4B-R4 depth-level XSI feature review may additionally produce:
 
 ```text
