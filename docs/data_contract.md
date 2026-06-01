@@ -1416,6 +1416,21 @@ Depth-level aggregation must preserve `any`, `max`, `percentile`, and `fraction`
 signals. It must not collapse side/azimuth evidence into mean-only labels.
 Side-level labels remain audit-only and are not the main training target.
 
+Controlled raw CAST Zc for geometry-aware regression labels must come only from
+existing NPZ intermediates, in priority order:
+
+```text
+/home/xiaoj/cement-channel-data/interim/cast_label_input_v001.npz
+/home/xiaoj/cement-channel-data/interim/cast_zc_baseline_v001.npz
+```
+
+The controlled loader must report `source_file`, `source_field`, depth field,
+azimuth field, raw Zc shape, and finite ratio. Raw `Zc` must have shape
+`[depth, azimuth]`, the depth grid must match the first dimension, and the
+azimuth grid must match the second dimension. If raw `Zc` is unavailable, the
+pipeline must stop and report the missing source. Derived fields such as
+`zc_ratio` or `relative_drop` must not be relabeled as raw `Zc`.
+
 MVP-4B-G may additionally write geometry-aware CAST depth-label review
 artifacts:
 
