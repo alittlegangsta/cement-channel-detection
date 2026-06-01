@@ -610,6 +610,14 @@ view/formula/protocol fields, and no silent fallback. Passing contract QA does
 not authorize MVP-4C, STC/APES, deep learning, final labels, or production
 claims.
 
+Bounded root-cause triage is allowed only after Stage 10 remains `stop` with
+passing contract invariants. It may classify the stop using only decision-level
+labels such as `target_view_mismatch_resolved_but_cv_unstable`,
+`fold_regime_shift_suspected`, `pearson_outlier_sensitivity_suspected`,
+`kernel_choice_not_primary_issue`, `existing_feature_set_insufficient_suspected`,
+or `mixed_or_unresolved`. It must not infer a physical cause for
+Pearson/Spearman divergence without separate evidence.
+
 The regression manual review supplement must prioritize continuous target
 inspection over binary support counts. It must include selected intervals for
 high fraction, low fraction, local-only anomaly, kernel-sensitive disagreement,

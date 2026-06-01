@@ -2835,6 +2835,20 @@ It writes contract inventory/invariant reports and may refresh Stage 9 report
 formatting from the existing label NPZ without recomputing labels. It must not
 change geometry sign, thresholds, kernels, features, or label semantics.
 
+If contract inventory exists, invariants pass, Stage 10 target view is explicit,
+no implementation mismatch is present, and Stage 10 still recommends `stop`,
+bounded root-cause triage may be run:
+
+```bash
+python scripts/06am_generate_geometry_regression_bounded_triage.py --config configs/paths.local.yaml
+```
+
+It writes `geometry_regression_bounded_triage_v001.md/json/csv` and may only
+summarize existing target views, kernels, folds, and Pearson/Spearman
+divergence. It must not add kernels, thresholds, features, waveform reads,
+training, tuning, MVP-4C, STC/APES, deep learning, final labels, or production
+claims.
+
 The regression manual review supplement is run by:
 
 ```bash
