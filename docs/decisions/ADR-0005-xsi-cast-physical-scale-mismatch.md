@@ -4,7 +4,8 @@ Date: 2026-05-28
 
 ## Status
 
-Accepted for MVP-4B-G audit scope only.
+Accepted for MVP-4B-G audit scope only. Updated for MVP-4B-GR Stage 7
+human-confirmed XSI depth-axis geometry sign.
 
 ## Context
 
@@ -24,17 +25,30 @@ R1 offset from R7 = -3 ft
 R13 offset from R7 = +3 ft
 R1 source distance = 1 ft
 source offset from R7 ~= -4 ft
-depth_axis_sign = audit both +1 and -1
+depth_axis_sign = -1
+sign_convention_status = human_confirmed
+depth_increases_toward = deeper
+sample_index_direction = deep_to_shallow
+receiver_index_direction = R1_deep_to_R13_shallow
+source_position = deeper_than_R1
 ```
 
-Because the logging depth axis/sign convention is not fully confirmed, the
-geometry must support both `sign=+1` and `sign=-1`.
+The human tool-geometry confirmation establishes that measured depth increases
+toward deeper, logging samples are ordered deep-to-shallow, R1 is physically
+deeper than R7, R13 is physically shallower than R7, and the source is deeper
+than R1. Because the stored schema offsets use source=-4 ft, R1=-3 ft, and
+R13=+3 ft relative to R7, downstream geometry must apply `depth_axis_sign=-1`.
 
 ## Decision
 
 MVP-4B-G records `configs/xsi_geometry.example.yaml` and
 `cement_channel.alignment.xsi_geometry.ReceiverGeometry` as the geometry source
 for review-only XSI-CAST alignment audits.
+
+The confirmed depth-axis sign is a human tool-geometry decision, not a
+selection made from audit metrics alone. It is independent of the RelBearing
+plus/minus azimuth rotation convention; RelBearing plus/minus remains governed
+by its own high-side coordinate validation and ablation policy.
 
 The required audit alignment modes are:
 

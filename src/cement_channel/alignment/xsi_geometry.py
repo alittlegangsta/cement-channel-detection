@@ -33,8 +33,12 @@ class ReceiverGeometry:
     r1_source_distance_ft: float = 1.0
     receiver_offsets_relative_to_reference_ft: tuple[float, ...] | None = None
     source_offset_relative_to_reference_ft: float | None = None
-    depth_axis_sign: int | str = "audit_both"
-    sign_convention_status: str = "requires_audit"
+    depth_axis_sign: int | str = -1
+    sign_convention_status: str = "human_confirmed"
+    depth_increases_toward: str = "deeper"
+    sample_index_direction: str = "deep_to_shallow"
+    receiver_index_direction: str = "R1_deep_to_R13_shallow"
+    source_position: str = "deeper_than_R1"
     alignment_modes: tuple[AlignmentMode, ...] = DEFAULT_ALIGNMENT_MODES
 
     def __post_init__(self) -> None:
@@ -56,6 +60,18 @@ class ReceiverGeometry:
             object.__setattr__(self, "source_offset_relative_to_reference_ft", source_offset)
         if self.depth_axis_sign not in (1, -1, "audit_both"):
             raise ValueError("depth_axis_sign must be +1, -1, or 'audit_both'.")
+        if self.sign_convention_status == "human_confirmed" and self.depth_axis_sign != -1:
+            raise ValueError("human_confirmed XSI depth-axis geometry requires sign=-1.")
+        if self.depth_increases_toward != "deeper":
+            raise ValueError("depth_increases_toward must be 'deeper'.")
+        if self.sample_index_direction != "deep_to_shallow":
+            raise ValueError("sample_index_direction must be 'deep_to_shallow'.")
+        if self.receiver_index_direction != "R1_deep_to_R13_shallow":
+            raise ValueError(
+                "receiver_index_direction must be 'R1_deep_to_R13_shallow'."
+            )
+        if self.source_position != "deeper_than_R1":
+            raise ValueError("source_position must be 'deeper_than_R1'.")
         invalid_modes = [
             mode for mode in self.alignment_modes if mode not in DEFAULT_ALIGNMENT_MODES
         ]
@@ -73,6 +89,16 @@ class ReceiverGeometry:
     @property
     def source_offset_ft(self) -> float:
         return float(self.source_offset_relative_to_reference_ft)
+
+    @property
+    def physical_receiver_offsets_ft(self) -> np.ndarray:
+        sign = self.audit_signs[0] if len(self.audit_signs) == 1 else -1
+        return float(sign) * self.receiver_offsets_ft
+
+    @property
+    def physical_source_offset_ft(self) -> float:
+        sign = self.audit_signs[0] if len(self.audit_signs) == 1 else -1
+        return float(sign) * self.source_offset_ft
 
     @property
     def audit_signs(self) -> tuple[DepthAxisSign, ...]:
@@ -199,10 +225,18 @@ class ReceiverGeometry:
                     geometry.get("source_offset_relative_to_reference_ft", -4.0),
                 )
             ),
-            depth_axis_sign=geometry.get("depth_axis_sign", "audit_both"),
+            depth_axis_sign=geometry.get("depth_axis_sign", -1),
             sign_convention_status=str(
-                geometry.get("sign_convention_status", "requires_audit")
+                geometry.get("sign_convention_status", "human_confirmed")
             ),
+            depth_increases_toward=str(geometry.get("depth_increases_toward", "deeper")),
+            sample_index_direction=str(
+                geometry.get("sample_index_direction", "deep_to_shallow")
+            ),
+            receiver_index_direction=str(
+                geometry.get("receiver_index_direction", "R1_deep_to_R13_shallow")
+            ),
+            source_position=str(geometry.get("source_position", "deeper_than_R1")),
             alignment_modes=modes,  # type: ignore[arg-type]
         )
 

@@ -498,8 +498,13 @@ authorized in a new gate.
 
 Geometry-aware alignment review compares R7 reference-depth, receiver-depth
 shifted, source-receiver midpoint, and source-receiver interval CAST
-weak-label aggregation for both depth-axis signs. The review is a supplement to
-manual review and does not change the prior depth-level refinement gate.
+weak-label aggregation. The depth-axis sign is now human-confirmed as `-1`
+from tool geometry: measured depth increases toward deeper, sample order is
+deep-to-shallow, receiver order is `R1 deep -> R13 shallow`, and the source is
+deeper than R1. This sign decision is independent of RelBearing plus/minus
+azimuth rotation and must not be justified by audit metrics alone. The review
+is a supplement to manual review and does not change the prior depth-level
+refinement gate.
 The source-receiver interval mode must retain receiver-level evidence before
 depth-level summaries, and all modes must preserve any/max/percentile/fraction
 signals rather than mean-only labels.

@@ -13,6 +13,11 @@ def test_receiver_geometry_offsets_and_source_distance() -> None:
     assert geometry.receiver_offsets_ft[-1] == 3.0
     assert geometry.source_offset_ft == -4.0
     assert np.isclose(geometry.receiver_offsets_ft[0] - geometry.source_offset_ft, 1.0)
+    assert geometry.depth_axis_sign == -1
+    assert geometry.sign_convention_status == "human_confirmed"
+    assert geometry.physical_receiver_offsets_ft[0] == 3.0
+    assert geometry.physical_receiver_offsets_ft[-1] == -3.0
+    assert geometry.physical_source_offset_ft == 4.0
 
 
 def test_receiver_geometry_supports_depth_axis_signs() -> None:
@@ -61,5 +66,11 @@ def test_receiver_geometry_loads_nested_example_config() -> None:
     assert geometry.reference_receiver_index == 7
     assert geometry.receiver_count == 13
     assert geometry.receiver_spacing_ft == 0.5
-    assert geometry.audit_signs == (1, -1)
+    assert geometry.audit_signs == (-1,)
+    assert geometry.depth_axis_sign == -1
+    assert geometry.sign_convention_status == "human_confirmed"
+    assert geometry.depth_increases_toward == "deeper"
+    assert geometry.sample_index_direction == "deep_to_shallow"
+    assert geometry.receiver_index_direction == "R1_deep_to_R13_shallow"
+    assert geometry.source_position == "deeper_than_R1"
     assert "source_receiver_interval" in geometry.alignment_modes

@@ -438,8 +438,12 @@ receiver_offsets_from_R7_ft:
 
 MVP-4B-G adds a geometry-aware review schema in
 `configs/xsi_geometry.example.yaml` under `xsi_geometry`. The schema records
-`depth_axis_sign = audit_both`, `sign_convention_status = requires_audit`,
-`source_offset_relative_to_r7_ft = -4.0`, and these review-only alignment modes:
+`depth_axis_sign = -1`, `sign_convention_status = human_confirmed`,
+`depth_increases_toward = deeper`,
+`sample_index_direction = deep_to_shallow`,
+`receiver_index_direction = R1_deep_to_R13_shallow`,
+`source_position = deeper_than_R1`, `source_offset_relative_to_r7_ft = -4.0`,
+and these review-only alignment modes:
 
 ```text
 r7_reference_depth
@@ -453,6 +457,14 @@ XSI receiver features are interpreted as source-to-receiver path or
 interval-scale acoustic responses. Geometry-aware aggregates are weak-label
 candidate review artifacts only; they do not create final labels and do not
 restart side-level azimuth classification.
+
+The confirmed sign is a human tool-geometry decision, not a result inferred
+from audit metrics alone. Because the stored schema offsets use
+`source=-4 ft`, `R1=-3 ft`, and `R13=+3 ft` relative to R7, while measured depth
+increases toward deeper and the physical receiver string is
+`R1 deep -> R13 shallow`, downstream geometry must apply `depth_axis_sign=-1`.
+This depth-axis sign is independent of the RelBearing plus/minus azimuth
+rotation convention.
 
 ---
 
@@ -1415,7 +1427,9 @@ artifacts:
 
 The geometry-aware NPZ compares `r7_reference_depth`,
 `receiver_depth_shifted`, `source_receiver_midpoint`, and
-`source_receiver_interval` for both depth-axis signs. Required fields include
+`source_receiver_interval` under the human-confirmed `depth_axis_sign=-1`.
+Historical `audit_both` support is retained only for reproducible review of
+older MVP-4B-G artifacts. Required fields include
 reference/source/receiver/midpoint/interval depths, `mode`, `sign`,
 `candidate_fraction`, `max_severity`, `max_confidence`,
 `max_relative_drop`, `plus_minus_disagreement_fraction`,

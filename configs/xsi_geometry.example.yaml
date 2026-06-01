@@ -1,6 +1,6 @@
 schema_version: schema_v001
 xsi_geometry_version: xsi_geometry_v001
-status: manually_confirmed_geometry_requires_depth_axis_sign_audit
+status: human_confirmed_geometry_sign
 
 xsi_geometry:
   reference_receiver_index: 7
@@ -9,8 +9,17 @@ xsi_geometry:
   r1_source_distance_ft: 1.0
   side_a_aligned_to_cast_zero_deg: true
   side_order: clockwise
-  depth_axis_sign: audit_both
-  sign_convention_status: requires_audit
+  depth_axis_sign: -1
+  sign_convention_status: human_confirmed
+  depth_increases_toward: deeper
+  sample_index_direction: deep_to_shallow
+  receiver_index_direction: R1_deep_to_R13_shallow
+  source_position: deeper_than_R1
+  geometry_sign_note: >
+    Human tool-geometry confirmation fixed depth_axis_sign=-1 because the
+    stored schema offsets use source=-4 ft, R1=-3 ft, and R13=+3 ft relative
+    to R7 while measured depth increases toward deeper. This is independent
+    of RelBearing plus/minus azimuth rotation.
   receiver_offsets_relative_to_r7_ft:
     R1: -3.0
     R2: -2.5
@@ -67,6 +76,7 @@ relbearing_convention:
   data_driven_validation: insufficient_evidence
   single_sign_alignment_approved: false
   approved_downstream_mode: plus_primary_minus_ablation
+  relation_to_depth_axis_sign: independent
 
 guardrails:
   label_status: weak_label_candidate

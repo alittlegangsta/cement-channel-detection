@@ -60,7 +60,10 @@ def test_geometry_aware_aggregation_outputs_all_modes_and_signs() -> None:
         cast_arrays=_cast_arrays(),
         depth_label_arrays=_depth_labels(),
         feature_arrays=_features(),
-        geometry=ReceiverGeometry(),
+        geometry=ReceiverGeometry(
+            depth_axis_sign="audit_both",
+            sign_convention_status="requires_audit",
+        ),
         aggregation_config=GeometryAwareAggregationConfig(),
     )
 
@@ -83,7 +86,7 @@ def test_source_receiver_interval_can_change_local_reference_evidence() -> None:
         cast_arrays=_cast_arrays(),
         depth_label_arrays=_depth_labels(),
         feature_arrays=_features(),
-        geometry=ReceiverGeometry(depth_axis_sign=1),
+        geometry=ReceiverGeometry(depth_axis_sign=1, sign_convention_status="requires_audit"),
         aggregation_config=GeometryAwareAggregationConfig(),
     )
     modes = arrays["mode"].astype(str)

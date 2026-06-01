@@ -16,8 +16,12 @@ def test_xsi_geometry_example_records_manual_confirmations() -> None:
     assert geometry["receiver_spacing_ft"] == 0.5
     assert geometry["r1_source_distance_ft"] == 1.0
     assert geometry["source_offset_relative_to_r7_ft"] == -4.0
-    assert geometry["depth_axis_sign"] == "audit_both"
-    assert geometry["sign_convention_status"] == "requires_audit"
+    assert geometry["depth_axis_sign"] == -1
+    assert geometry["sign_convention_status"] == "human_confirmed"
+    assert geometry["depth_increases_toward"] == "deeper"
+    assert geometry["sample_index_direction"] == "deep_to_shallow"
+    assert geometry["receiver_index_direction"] == "R1_deep_to_R13_shallow"
+    assert geometry["source_position"] == "deeper_than_R1"
     assert geometry["alignment_modes"] == [
         "r7_reference_depth",
         "receiver_depth_shifted",
@@ -63,3 +67,4 @@ def test_xsi_geometry_example_records_manual_confirmations() -> None:
     assert relbearing["ablation_convention"] == "minus"
     assert relbearing["data_driven_validation"] == "insufficient_evidence"
     assert relbearing["single_sign_alignment_approved"] is False
+    assert relbearing["relation_to_depth_axis_sign"] == "independent"

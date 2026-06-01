@@ -2658,11 +2658,17 @@ source_receiver_midpoint
 source_receiver_interval
 ```
 
-Each mode must be audited with `sign=+1` and `sign=-1` while the depth-axis
-sign remains unconfirmed. Geometry-aware depth labels and manual review
-supplements are weak-label candidate audit artifacts only. They must not call
-CAST candidates ground truth, generate final labels, run STC/APES, fit deep
-learning models, or enter MVP-4C.
+The depth-axis geometry sign is now human-confirmed as `depth_axis_sign=-1`.
+Measured depth increases toward deeper, XSI sample index order is
+deep-to-shallow, receiver order is `R1 deep -> R13 shallow`, and the monopole
+source is deeper than R1. This sign fixes how the stored offsets
+`source=-4 ft`, `R1=-3 ft`, and `R13=+3 ft` are applied relative to R7. It was
+confirmed from tool geometry, not selected from audit metrics alone. This
+depth-axis sign remains independent of the RelBearing plus/minus azimuth
+rotation question. Geometry-aware depth labels and manual review supplements
+are weak-label candidate audit artifacts only. They must not call CAST
+candidates ground truth, generate final labels, run STC/APES, fit deep learning
+models, or enter MVP-4C.
 
 Stage 2 geometry-aware CAST aggregation is run by:
 
