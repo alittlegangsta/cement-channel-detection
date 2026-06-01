@@ -390,21 +390,26 @@ def _aggregate_region(
     context: CastContext,
     weighted: bool,
 ) -> dict[str, float | int]:
-    depth_mask = _depth_region_mask(context.depth, lower, upper)
-    possible_cell_count = int(np.count_nonzero(depth_mask) * context.zc.shape[1])
+    region_slice = _depth_region_slice(context.depth, lower, upper)
+    depth_subset = context.depth[region_slice]
+    possible_cell_count = int(depth_subset.size * context.zc.shape[1])
     if possible_cell_count == 0:
         return _empty_region_metrics()
-    zc = context.zc[depth_mask]
+    zc = context.zc[region_slice]
     finite = np.isfinite(zc)
     total = int(np.count_nonzero(finite))
     if total == 0:
         return {**_empty_region_metrics(), "total_cell_count": 0}
-    raw = context.raw_candidate[depth_mask] & finite
-    rel = None if context.relative_candidate is None else context.relative_candidate[depth_mask]
-    combined = context.combined_candidate[depth_mask] & finite
+    raw = context.raw_candidate[region_slice] & finite
+    rel = (
+        None
+        if context.relative_candidate is None
+        else context.relative_candidate[region_slice]
+    )
+    combined = context.combined_candidate[region_slice] & finite
     rel_mask = np.zeros_like(raw, dtype=bool) if rel is None else rel & finite
     weights = _region_weights(
-        context.depth[depth_mask],
+        depth_subset,
         zc.shape[1],
         lower=lower,
         upper=upper,
@@ -419,7 +424,9 @@ def _aggregate_region(
     relative_fraction = _fraction(rel_mask, finite)
     combined_fraction = _fraction(combined, finite)
     zc_finite = zc[finite]
-    relative_drop = None if context.relative_drop is None else context.relative_drop[depth_mask]
+    relative_drop = (
+        None if context.relative_drop is None else context.relative_drop[region_slice]
+    )
     max_relative_drop = np.nan
     if relative_drop is not None:
         rel_values = relative_drop[np.isfinite(relative_drop)]
@@ -442,13 +449,28 @@ def _aggregate_region(
     }
 
 
-def _depth_region_mask(depth: np.ndarray, lower: float, upper: float) -> np.ndarray:
+def _depth_region_slice(depth: np.ndarray, lower: float, upper: float) -> slice:
+    if depth.size == 0:
+        return slice(0, 0)
     if np.isclose(lower, upper):
-        nearest = int(np.argmin(np.abs(depth - lower)))
-        mask = np.zeros(depth.size, dtype=bool)
-        mask[nearest] = True
-        return mask
-    return (depth >= min(lower, upper)) & (depth <= max(lower, upper))
+        insert = int(np.searchsorted(depth, lower, side="left"))
+        if insert <= 0:
+            nearest = 0
+        elif insert >= depth.size:
+            nearest = depth.size - 1
+        else:
+            before = insert - 1
+            after = insert
+            nearest = (
+                before
+                if abs(float(depth[before]) - lower) <= abs(float(depth[after]) - lower)
+                else after
+            )
+        return slice(nearest, nearest + 1)
+    return slice(
+        int(np.searchsorted(depth, min(lower, upper), side="left")),
+        int(np.searchsorted(depth, max(lower, upper), side="right")),
+    )
 
 
 def _region_weights(
