@@ -572,3 +572,14 @@ Derived binary views may be used only as sanity summaries. They must not be
 reported as final labels or model-performance targets. A continuous target that
 collapses to a constant for every kernel is a stop condition requiring manual
 review before any further audit.
+
+Regression alignment audits may compare `r7_reference_point`,
+`midpoint_window`, `uniform_source_receiver_interval`, and
+`triangular_midpoint_weighted` using correlations and simple cross-validated
+linear probes. These probes are audit-only checks against permutation; they do
+not produce model weights and must not be reported as production metrics. If
+`midpoint_window` or `triangular_midpoint_weighted` is stable and improves over
+R7, it may be recommended as a next manual-review candidate. If the uniform
+interval target is overly concentrated, it remains audit-only. If every kernel
+is unstable or below permutation, the process stops and waits for manual
+review.

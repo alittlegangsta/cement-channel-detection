@@ -2780,3 +2780,27 @@ Reports must include raw-Zc availability, geometry sign status, kernel target
 distributions, zero/nonzero fractions, mean/median/p90/p95/max, and derived
 binary support at multiple fraction thresholds. Derived binary views are
 sanity-only and must not be called final labels.
+
+The regression alignment audit is run by:
+
+```bash
+python scripts/06ai_audit_geometry_regression.py --config configs/paths.local.yaml
+```
+
+It consumes `geometry_aware_regression_labels_v001.npz`,
+`depth_level_xsi_features_v001.npz`, and the regression-label config. It may
+report Spearman/Pearson correlations, no-weight-export linear sanity probes,
+cross-validated MAE/R2 sanity values, permutation comparisons, fold stability,
+5700-band dependency, leakage warnings, and kernel sensitivity. These are
+sanity audit metrics only and must not be described as model performance.
+
+The audit writes:
+
+```text
+geometry_regression_audit_v001.md
+geometry_regression_audit_v001.json
+geometry_regression_audit_v001.csv
+```
+
+If all kernels are unstable relative to permutation, the audit must stop and
+report that no MVP-4C/STC/APES/deep-learning/final-label step is allowed.
