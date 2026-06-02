@@ -1,0 +1,77 @@
+schema_version: schema_v001
+config_version: geometry_regression_depth_regime_review_policy_v001
+
+review_policy:
+  status: human_approved_for_review_only
+  formal_cv_split_change_approved: false
+  regime_specific_modeling_approved: false
+  final_labels_approved: false
+  production_claims_approved: false
+
+broad_review_regimes:
+  - id: regime_a
+    depth_min_ft: 2350.0
+    depth_max_ft: 3534.31
+    purpose: descriptive_review_only
+  - id: regime_b
+    depth_min_ft: 3534.31
+    depth_max_ft: 4678.49
+    purpose: descriptive_review_only
+  - id: regime_c
+    depth_min_ft: 4678.49
+    depth_max_ft: 5760.0
+    purpose: descriptive_review_only
+
+priority_boundary_review_zones:
+  - depth_ft: 2582.79
+    priority: primary
+    support_count: 4
+  - depth_ft: 4219.52
+    priority: primary
+    support_count: 3
+  - depth_ft: 5680.0
+    priority: primary
+    support_count: 2
+  - depth_ft: 2826.85
+    priority: secondary
+    support_count: 1
+  - depth_ft: 3534.31
+    priority: secondary
+    support_count: 1
+  - depth_ft: 3984.03
+    priority: secondary
+    support_count: 2
+  - depth_ft: 4678.49
+    priority: secondary
+    support_count: 1
+
+boundary_review_half_width_ft: 15.0
+boundary_review_half_width_policy: conservative_review_only_default
+
+target_view_policy:
+  receiver_mean: conservative_reference
+  receiver_p90: robust_candidate_for_human_review
+  receiver_max: sensitive_audit_only
+  full_360_fraction: auxiliary_coverage_view
+  receiver_std: disagreement_audit
+
+morphology_policy:
+  use_existing_arrays_for_review: true
+  morphology_target_redesign_approved: false
+
+forbidden_automatic_actions:
+  formal_cv_split_change: true
+  regime_specific_model_training: true
+  primary_target_view_change: true
+  receiver_p90_primary_adoption: true
+  morphology_target_creation: true
+  label_definition_change: true
+  feature_addition: true
+  preprocessing_change: true
+  waveform_read: true
+  final_label_generation: true
+  mvp4c: true
+  stc: true
+  apes: true
+  deep_learning: true
+
