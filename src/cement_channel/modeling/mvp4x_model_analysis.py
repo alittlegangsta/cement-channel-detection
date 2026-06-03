@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,8 +10,12 @@ from typing import Any
 
 import numpy as np
 
+from cement_channel.modeling.dependencies import require_sklearn_for_modeling
 from cement_channel.modeling.mvp4x_baselines import (
     BASELINE_CSV_VERSION,
+    _make_model,
+    compute_regression_metrics,
+    contiguous_depth_folds,
     run_mvp4x_baselines,
 )
 
@@ -40,6 +45,7 @@ class EnhancedBaselineReport:
     top_10_stable_features: list[dict[str, Any]]
     regime_specific_error_analysis: dict[str, Any]
     special_band_error_analysis: dict[str, Any]
+    low_orientation_error_analysis: dict[str, Any]
     review_dir: str
     review_files: dict[str, str]
     warnings: list[str]
@@ -129,11 +135,19 @@ def run_enhanced_feature_baselines(
         rows.extend(set_rows)
     best = _best_enhanced_result(sub_reports)
     feature_group_summary = summarize_feature_groups(feature_sets)
-    analysis = _analysis_placeholders(sub_reports)
+    analysis = compute_fitted_model_analysis(
+        snapshot=snapshot,
+        feature_sets=feature_sets,
+        config=config,
+        best=best,
+        review_dir=review_dir,
+        overwrite=overwrite,
+    )
     review_files = write_model_review_dir(
         review_dir=review_dir,
         feature_group_summary=feature_group_summary,
         analysis=analysis,
+        generated_files=_as_dict(analysis.get("review_files")),
         overwrite=overwrite,
     )
     report = EnhancedBaselineReport(
@@ -149,6 +163,7 @@ def run_enhanced_feature_baselines(
         top_10_stable_features=analysis["top_10_stable_features"],
         regime_specific_error_analysis=analysis["regime_specific_error_analysis"],
         special_band_error_analysis=analysis["special_band_error_analysis"],
+        low_orientation_error_analysis=analysis["low_orientation_error_analysis"],
         review_dir=str(review_dir),
         review_files=review_files,
         warnings=warnings,
@@ -219,11 +234,513 @@ def summarize_feature_groups(feature_sets: dict[str, dict[str, Any]]) -> dict[st
     return output
 
 
+def compute_fitted_model_analysis(
+    *,
+    snapshot: dict[str, np.ndarray],
+    feature_sets: dict[str, dict[str, Any]],
+    config: dict[str, Any],
+    best: dict[str, Any] | None,
+    review_dir: Path,
+    overwrite: bool,
+) -> dict[str, Any]:
+    if not best:
+        return _analysis_placeholders({})
+    feature_set_name = str(best.get("feature_set"))
+    target = str(best.get("target"))
+    model_name = str(best.get("model"))
+    if feature_set_name not in feature_sets:
+        skipped = {
+            "status": "skipped_best_feature_set_missing",
+            "feature_set": feature_set_name,
+        }
+        return _skipped_analysis(skipped)
+    if target not in snapshot:
+        skipped = {"status": "skipped_best_target_missing", "target": target}
+        return _skipped_analysis(skipped)
+
+    baseline_config = _as_dict(config.get("baseline"))
+    sklearn_modules, _environment = require_sklearn_for_modeling()
+    feature_set = feature_sets[feature_set_name]
+    raw_X = np.asarray(feature_set["matrix"], dtype=np.float32)
+    X = np.nan_to_num(raw_X, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+    y = np.asarray(snapshot[target], dtype=np.float32).reshape(-1)
+    depth = np.asarray(snapshot["depth"], dtype=np.float32).reshape(-1)
+    feature_names = np.asarray(feature_set["names"]).astype(str)
+    feature_groups = np.asarray(feature_set["groups"]).astype(str)
+    sample_mask = np.isfinite(y) & np.all(np.isfinite(raw_X), axis=1)
+
+    oof, fold_summaries, fold_importance = _fit_oof_with_permutation_importance(
+        X=X,
+        y=y,
+        depth=depth,
+        sample_mask=sample_mask,
+        model_name=model_name,
+        sklearn_modules=sklearn_modules,
+        config=baseline_config,
+        feature_names=feature_names,
+        feature_groups=feature_groups,
+    )
+    full_metrics = compute_regression_metrics(y[sample_mask], oof[sample_mask])
+    importance = _summarize_permutation_importance(fold_importance)
+    ablation = _run_feature_group_ablation(
+        X=X,
+        y=y,
+        depth=depth,
+        sample_mask=sample_mask,
+        model_name=model_name,
+        sklearn_modules=sklearn_modules,
+        config=baseline_config,
+        feature_groups=feature_groups,
+        full_metrics=full_metrics,
+    )
+    regime_analysis = _label_error_analysis(
+        y_true=y,
+        y_pred=oof,
+        labels=np.asarray(snapshot["broad_regime_id"]).astype(str),
+        sample_mask=sample_mask,
+    )
+    special_analysis = _flag_error_analysis(
+        y_true=y,
+        y_pred=oof,
+        sample_mask=sample_mask,
+        flags={
+            "saturation_platform_flag": np.asarray(
+                snapshot.get("saturation_platform_flag", False),
+                dtype=bool,
+            ),
+            "special_5680_flag": np.asarray(snapshot.get("special_5680_flag", False), dtype=bool),
+            "any_special_flag": np.asarray(snapshot.get("any_special_flag", False), dtype=bool),
+        },
+    )
+    low_orientation_analysis = _flag_error_analysis(
+        y_true=y,
+        y_pred=oof,
+        sample_mask=sample_mask,
+        flags={
+            "low_orientation_confidence_flag": np.asarray(
+                snapshot.get("low_orientation_confidence_flag", False),
+                dtype=bool,
+            ),
+        },
+    )
+    review_files = _write_review_plots(
+        review_dir=review_dir,
+        y_true=y,
+        y_pred=oof,
+        depth=depth,
+        sample_mask=sample_mask,
+        overwrite=overwrite,
+    )
+    return {
+        "feature_group_ablation": ablation,
+        "permutation_importance": {
+            "status": "completed",
+            "method": "validation_fold_feature_shuffle",
+            "scoring": "spearman_drop",
+            "feature_set": feature_set_name,
+            "target": target,
+            "model": model_name,
+            "folds": fold_summaries,
+            "aggregate_metrics": full_metrics,
+            "feature_count": int(feature_names.size),
+        },
+        "top_30_features": importance["top_30_features"],
+        "top_10_stable_features": importance["top_10_stable_features"],
+        "regime_specific_error_analysis": regime_analysis,
+        "special_band_error_analysis": special_analysis,
+        "low_orientation_error_analysis": low_orientation_analysis,
+        "review_files": review_files,
+    }
+
+
+def _fit_oof_with_permutation_importance(
+    *,
+    X: np.ndarray,
+    y: np.ndarray,
+    depth: np.ndarray,
+    sample_mask: np.ndarray,
+    model_name: str,
+    sklearn_modules: dict[str, Any],
+    config: dict[str, Any],
+    feature_names: np.ndarray,
+    feature_groups: np.ndarray,
+) -> tuple[np.ndarray, list[dict[str, Any]], list[dict[str, Any]]]:
+    folds = contiguous_depth_folds(
+        depth,
+        sample_mask,
+        n_folds=int(config.get("n_contiguous_folds", 3)),
+    )
+    oof = np.full(y.shape, np.nan, dtype=np.float32)
+    fold_summaries: list[dict[str, Any]] = []
+    fold_importance: list[dict[str, Any]] = []
+    for fold_index, validation_mask in enumerate(folds):
+        train_mask = sample_mask & ~validation_mask
+        validation_mask = sample_mask & validation_mask
+        if np.count_nonzero(train_mask) == 0 or np.count_nonzero(validation_mask) == 0:
+            continue
+        model = _make_model(
+            model_name,
+            sklearn_modules,
+            config,
+            random_state=31 + fold_index,
+        )
+        model.fit(X[train_mask], y[train_mask])
+        X_validation = X[validation_mask]
+        y_validation = y[validation_mask]
+        prediction = np.asarray(model.predict(X_validation), dtype=np.float32)
+        oof[validation_mask] = prediction
+        metrics = compute_regression_metrics(y_validation, prediction)
+        fold_summaries.append(
+            {
+                "fold": fold_index,
+                "validation_count": int(np.count_nonzero(validation_mask)),
+                **metrics,
+            }
+        )
+        fold_importance.extend(
+            _fold_permutation_importance(
+                model=model,
+                X_validation=X_validation,
+                y_validation=y_validation,
+                baseline_spearman=metrics.get("spearman"),
+                feature_names=feature_names,
+                feature_groups=feature_groups,
+                fold_index=fold_index,
+                seed=20240603 + fold_index,
+            )
+        )
+    return oof, fold_summaries, fold_importance
+
+
+def _fold_permutation_importance(
+    *,
+    model: Any,
+    X_validation: np.ndarray,
+    y_validation: np.ndarray,
+    baseline_spearman: float | None,
+    feature_names: np.ndarray,
+    feature_groups: np.ndarray,
+    fold_index: int,
+    seed: int,
+) -> list[dict[str, Any]]:
+    if baseline_spearman is None:
+        baseline = 0.0
+    else:
+        baseline = float(baseline_spearman)
+    rng = np.random.default_rng(seed)
+    rows: list[dict[str, Any]] = []
+    for feature_index, (feature_name, feature_group) in enumerate(
+        zip(feature_names.tolist(), feature_groups.tolist(), strict=True)
+    ):
+        permuted = X_validation.copy()
+        permuted[:, feature_index] = rng.permutation(permuted[:, feature_index])
+        prediction = np.asarray(model.predict(permuted), dtype=np.float32)
+        metrics = compute_regression_metrics(y_validation, prediction)
+        permuted_spearman = metrics.get("spearman")
+        drop = None if permuted_spearman is None else baseline - float(permuted_spearman)
+        rows.append(
+            {
+                "fold": fold_index,
+                "feature_index": int(feature_index),
+                "feature_name": str(feature_name),
+                "feature_group": str(feature_group),
+                "spearman_drop": drop,
+            }
+        )
+    return rows
+
+
+def _summarize_permutation_importance(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    by_feature: dict[int, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_feature.setdefault(int(row["feature_index"]), []).append(row)
+    fold_top: dict[int, set[int]] = {}
+    for fold in sorted({int(row["fold"]) for row in rows}):
+        fold_rows = [row for row in rows if int(row["fold"]) == fold]
+        fold_rows.sort(key=lambda row: _none_safe_float(row.get("spearman_drop")), reverse=True)
+        fold_top[fold] = {int(row["feature_index"]) for row in fold_rows[:30]}
+
+    summaries: list[dict[str, Any]] = []
+    for feature_index, feature_rows in by_feature.items():
+        drops = [
+            float(row["spearman_drop"])
+            for row in feature_rows
+            if row.get("spearman_drop") is not None
+        ]
+        if not drops:
+            mean_drop = None
+            std_drop = None
+        else:
+            mean_drop = float(np.mean(drops))
+            std_drop = float(np.std(drops))
+        summaries.append(
+            {
+                "feature_index": feature_index,
+                "feature_name": str(feature_rows[0]["feature_name"]),
+                "feature_group": str(feature_rows[0]["feature_group"]),
+                "mean_spearman_drop": mean_drop,
+                "std_spearman_drop": std_drop,
+                "fold_count": len(feature_rows),
+                "top_30_fold_count": int(
+                    sum(feature_index in top_features for top_features in fold_top.values())
+                ),
+            }
+        )
+    summaries.sort(
+        key=lambda row: (
+            _none_safe_float(row.get("mean_spearman_drop")),
+            int(row.get("top_30_fold_count") or 0),
+        ),
+        reverse=True,
+    )
+    stable = [
+        row
+        for row in summaries
+        if int(row.get("top_30_fold_count") or 0) >= min(2, max(1, len(fold_top)))
+    ]
+    if len(stable) < 10:
+        stable = summaries[:10]
+    return {
+        "top_30_features": summaries[:30],
+        "top_10_stable_features": stable[:10],
+    }
+
+
+def _run_feature_group_ablation(
+    *,
+    X: np.ndarray,
+    y: np.ndarray,
+    depth: np.ndarray,
+    sample_mask: np.ndarray,
+    model_name: str,
+    sklearn_modules: dict[str, Any],
+    config: dict[str, Any],
+    feature_groups: np.ndarray,
+    full_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    groups = sorted(set(feature_groups.tolist()))
+    full_spearman = full_metrics.get("spearman")
+    results: list[dict[str, Any]] = []
+    for group in groups:
+        keep = feature_groups != group
+        if np.count_nonzero(keep) == 0:
+            continue
+        oof = _fit_oof_predictions(
+            X=X[:, keep],
+            y=y,
+            depth=depth,
+            sample_mask=sample_mask,
+            model_name=model_name,
+            sklearn_modules=sklearn_modules,
+            config=config,
+        )
+        metrics = compute_regression_metrics(y[sample_mask], oof[sample_mask])
+        group_spearman = metrics.get("spearman")
+        loss = None
+        if full_spearman is not None and group_spearman is not None:
+            loss = float(full_spearman) - float(group_spearman)
+        results.append(
+            {
+                "dropped_group": str(group),
+                "remaining_feature_count": int(np.count_nonzero(keep)),
+                "spearman_without_group": group_spearman,
+                "spearman_loss_vs_full": loss,
+                "mae_without_group": metrics.get("mae"),
+            }
+        )
+    results.sort(key=lambda row: _none_safe_float(row.get("spearman_loss_vs_full")), reverse=True)
+    return {
+        "status": "completed",
+        "method": "drop_one_feature_group_contiguous_cv",
+        "full_model_metrics": full_metrics,
+        "results": results,
+    }
+
+
+def _fit_oof_predictions(
+    *,
+    X: np.ndarray,
+    y: np.ndarray,
+    depth: np.ndarray,
+    sample_mask: np.ndarray,
+    model_name: str,
+    sklearn_modules: dict[str, Any],
+    config: dict[str, Any],
+) -> np.ndarray:
+    folds = contiguous_depth_folds(
+        depth,
+        sample_mask,
+        n_folds=int(config.get("n_contiguous_folds", 3)),
+    )
+    oof = np.full(y.shape, np.nan, dtype=np.float32)
+    for fold_index, validation_mask in enumerate(folds):
+        train_mask = sample_mask & ~validation_mask
+        validation_mask = sample_mask & validation_mask
+        if np.count_nonzero(train_mask) == 0 or np.count_nonzero(validation_mask) == 0:
+            continue
+        model = _make_model(
+            model_name,
+            sklearn_modules,
+            config,
+            random_state=71 + fold_index,
+        )
+        model.fit(X[train_mask], y[train_mask])
+        oof[validation_mask] = np.asarray(model.predict(X[validation_mask]), dtype=np.float32)
+    return oof
+
+
+def _label_error_analysis(
+    *,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    labels: np.ndarray,
+    sample_mask: np.ndarray,
+) -> dict[str, Any]:
+    output: dict[str, Any] = {"status": "completed", "groups": {}}
+    mask = sample_mask & np.isfinite(y_pred)
+    for label in sorted(set(labels[mask].tolist())):
+        group_mask = mask & (labels == label)
+        output["groups"][str(label)] = {
+            "sample_count": int(np.count_nonzero(group_mask)),
+            **compute_regression_metrics(y_true[group_mask], y_pred[group_mask]),
+        }
+    completed = [
+        {"label": label, **metrics}
+        for label, metrics in output["groups"].items()
+        if metrics.get("mae") is not None
+    ]
+    completed.sort(key=lambda row: float(row["mae"]), reverse=True)
+    output["worst_by_mae"] = completed[0] if completed else None
+    return output
+
+
+def _flag_error_analysis(
+    *,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    sample_mask: np.ndarray,
+    flags: dict[str, np.ndarray],
+) -> dict[str, Any]:
+    output: dict[str, Any] = {"status": "completed", "flags": {}}
+    finite_mask = sample_mask & np.isfinite(y_pred)
+    for name, values in flags.items():
+        flag = np.asarray(values, dtype=bool).reshape(-1)
+        flagged = finite_mask & flag
+        unflagged = finite_mask & ~flag
+        flagged_metrics = compute_regression_metrics(y_true[flagged], y_pred[flagged])
+        unflagged_metrics = compute_regression_metrics(y_true[unflagged], y_pred[unflagged])
+        flagged_s = flagged_metrics.get("spearman")
+        unflagged_s = unflagged_metrics.get("spearman")
+        delta = None if flagged_s is None or unflagged_s is None else (
+            float(flagged_s) - float(unflagged_s)
+        )
+        output["flags"][name] = {
+            "flagged_sample_count": int(np.count_nonzero(flagged)),
+            "unflagged_sample_count": int(np.count_nonzero(unflagged)),
+            "flagged_metrics": flagged_metrics,
+            "unflagged_metrics": unflagged_metrics,
+            "spearman_delta_flagged_minus_unflagged": delta,
+        }
+    return output
+
+
+def _write_review_plots(
+    *,
+    review_dir: Path,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    depth: np.ndarray,
+    sample_mask: np.ndarray,
+    overwrite: bool,
+) -> dict[str, str]:
+    review_dir.mkdir(parents=True, exist_ok=True)
+    files = {
+        "predicted_vs_target_png": review_dir / "predicted_vs_target.png",
+        "residual_vs_depth_png": review_dir / "residual_vs_depth.png",
+        "calibration_by_target_quantile_png": review_dir / "calibration_by_target_quantile.png",
+    }
+    for path in files.values():
+        _ensure_can_write(path, overwrite=overwrite)
+    try:
+        os.environ.setdefault("MPLCONFIGDIR", "/tmp/cement_channel_matplotlib")
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return {"plot_status": "skipped_matplotlib_unavailable"}
+
+    mask = sample_mask & np.isfinite(y_pred)
+    true = y_true[mask]
+    pred = y_pred[mask]
+    depth_values = depth[mask]
+    residual = pred - true
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+    ax.scatter(true, pred, s=7, alpha=0.35)
+    min_value = float(np.nanmin(np.concatenate([true, pred])))
+    max_value = float(np.nanmax(np.concatenate([true, pred])))
+    ax.plot([min_value, max_value], [min_value, max_value], color="black", linewidth=1)
+    ax.set_xlabel("weak label target")
+    ax.set_ylabel("prediction")
+    ax.set_title("Predicted vs target")
+    fig.tight_layout()
+    fig.savefig(files["predicted_vs_target_png"], dpi=150)
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.scatter(depth_values, residual, s=7, alpha=0.35)
+    ax.axhline(0.0, color="black", linewidth=1)
+    ax.set_xlabel("depth ft")
+    ax.set_ylabel("residual")
+    ax.set_title("Residual vs depth")
+    fig.tight_layout()
+    fig.savefig(files["residual_vs_depth_png"], dpi=150)
+    plt.close(fig)
+
+    calibration = _calibration_rows(true, pred)
+    fig, ax = plt.subplots(figsize=(6, 5))
+    ax.plot(
+        [row["target_mean"] for row in calibration],
+        [row["prediction_mean"] for row in calibration],
+        marker="o",
+    )
+    ax.set_xlabel("target quantile mean")
+    ax.set_ylabel("prediction mean")
+    ax.set_title("Calibration by target quantile")
+    fig.tight_layout()
+    fig.savefig(files["calibration_by_target_quantile_png"], dpi=150)
+    plt.close(fig)
+    return {key: str(path) for key, path in files.items()}
+
+
+def _calibration_rows(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    *,
+    quantile_count: int = 5,
+) -> list[dict[str, float | int]]:
+    order = np.argsort(y_true)
+    rows: list[dict[str, float | int]] = []
+    for index, indices in enumerate(np.array_split(order, quantile_count)):
+        if indices.size == 0:
+            continue
+        rows.append(
+            {
+                "quantile_bin": index,
+                "target_mean": float(np.mean(y_true[indices])),
+                "prediction_mean": float(np.mean(y_pred[indices])),
+            }
+        )
+    return rows
+
+
 def write_model_review_dir(
     *,
     review_dir: Path,
     feature_group_summary: dict[str, Any],
     analysis: dict[str, Any],
+    generated_files: dict[str, str],
     overwrite: bool,
 ) -> dict[str, str]:
     review_dir.mkdir(parents=True, exist_ok=True)
@@ -237,6 +754,7 @@ def write_model_review_dir(
                 "review_version": MODEL_REVIEW_VERSION,
                 "feature_sets": feature_group_summary,
                 "analysis": analysis,
+                "review_files": generated_files,
                 **RESEARCH_FLAGS,
             },
             indent=2,
@@ -253,8 +771,12 @@ def write_model_review_dir(
                 "Scope: research_only, exploratory_only, weak_label_target, "
                 "no_final_labels, no_ground_truth_claim, no_production_claim.",
                 "",
-                "Feature importance, ablation, calibration plots, predicted-vs-target plots, "
-                "and residual-vs-depth plots are skipped unless a sklearn model is fitted.",
+                f"- feature_group_ablation: {analysis['feature_group_ablation'].get('status')}",
+                f"- permutation_importance: {analysis['permutation_importance'].get('status')}",
+                f"- top_stable_features: {len(analysis['top_10_stable_features'])}",
+                "",
+                "## Review Files",
+                *[f"- {name}: {path}" for name, path in sorted(generated_files.items())],
                 "",
             ]
         ),
@@ -263,6 +785,7 @@ def write_model_review_dir(
     return {
         "feature_set_summary_json": str(summary_json),
         "model_review_summary_md": str(summary_md),
+        **generated_files,
     }
 
 
@@ -347,6 +870,21 @@ def _analysis_placeholders(sub_reports: dict[str, dict[str, Any]]) -> dict[str, 
         "top_10_stable_features": [],
         "regime_specific_error_analysis": skipped,
         "special_band_error_analysis": skipped,
+        "low_orientation_error_analysis": skipped,
+        "review_files": {},
+    }
+
+
+def _skipped_analysis(skipped: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "feature_group_ablation": skipped,
+        "permutation_importance": skipped,
+        "top_30_features": [],
+        "top_10_stable_features": [],
+        "regime_specific_error_analysis": skipped,
+        "special_band_error_analysis": skipped,
+        "low_orientation_error_analysis": skipped,
+        "review_files": {},
     }
 
 
@@ -399,3 +937,13 @@ def _ensure_can_write(path: Path, *, overwrite: bool) -> None:
 
 def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _none_safe_float(value: Any) -> float:
+    if value is None:
+        return float("-inf")
+    try:
+        output = float(value)
+    except (TypeError, ValueError):
+        return float("-inf")
+    return output if np.isfinite(output) else float("-inf")

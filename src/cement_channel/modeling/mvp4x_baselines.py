@@ -197,6 +197,11 @@ def run_mvp4x_baselines(
             permutation[target_key] = {}
             derived_binary["results"][target_key] = {}
             for model_name in MODEL_NAMES:
+                print(
+                    "MVP-4X fitted baseline "
+                    f"feature_set={feature_set_name} target={target} model={model_name}",
+                    flush=True,
+                )
                 cv_result = _run_contiguous_cv(
                     X=X,
                     y=y,
@@ -756,7 +761,7 @@ def _make_model(
             n_estimators=int(config.get("random_forest_n_estimators", 80)),
             max_depth=int(config.get("random_forest_max_depth", 6)),
             random_state=random_state,
-            n_jobs=1,
+            n_jobs=int(config.get("random_forest_n_jobs", -1)),
         )
     elif model_name == "HistGradientBoostingRegressor":
         model = ensemble.HistGradientBoostingRegressor(

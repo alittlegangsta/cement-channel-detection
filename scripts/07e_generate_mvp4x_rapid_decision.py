@@ -167,37 +167,117 @@ def build_decision(
         )
     existing_sufficient = bool(_as_dict(existing.get("decision")).get("baseline_sufficient"))
     waveform_triggered = bool(waveform.get("feature_version"))
-    enhanced_best = enhanced.get("best_result")
+    existing_best = _as_dict(_as_dict(existing.get("decision")).get("best_result"))
+    enhanced_best = _as_dict(enhanced.get("best_result"))
+    best_basis = _best_basis(existing_best, enhanced_best)
     sklearn_available = bool(existing.get("sklearn_available")) or any(
         bool(_as_dict(report).get("sklearn_available"))
         for report in _as_dict(enhanced.get("sub_reports")).values()
+    )
+    has_real_fitted_model = bool(existing_best) or bool(enhanced_best)
+    best_sub_report = _best_sub_report(enhanced, enhanced_best)
+    best_target_key = str(enhanced_best.get("target_key") or existing_best.get("target_key") or "")
+    best_model = str(enhanced_best.get("model") or existing_best.get("model") or "")
+    signal_detected = existing_sufficient or _signal_detected(best_basis)
+    stratified_signal = _stratified_signal(
+        report=best_sub_report,
+        target_key=best_target_key,
+        model=best_model,
+        enhanced=enhanced,
     )
     if errors:
         decision = "stop_data_contract_issue"
     elif leakage:
         decision = "stop_leakage_detected"
-    elif existing_sufficient or enhanced_best:
+    elif signal_detected:
         decision = "exploratory_signal_detected_continue_classical_modeling"
+    elif stratified_signal:
+        decision = "exploratory_signal_regime_dependent_request_stratified_study"
     else:
         decision = "exploratory_signal_insufficient_stop"
     answers = {
+        "f1_1_has_real_fitted_model": has_real_fitted_model,
+        "f1_2_best_model": best_basis.get("model"),
+        "f1_3_best_feature_set": best_basis.get("feature_set"),
+        "f1_4_receiver_p90_stability": _target_stability("receiver_p90", existing, enhanced),
+        "f1_5_reference_target_comparison": _reference_target_comparison(existing, enhanced),
+        "f1_6_contiguous_3fold": _contiguous_summary(best_sub_report, best_target_key, best_model),
+        "f1_7_leave_one_regime_out": _leave_one_summary(
+            best_sub_report,
+            best_target_key,
+            best_model,
+        ),
+        "f1_8_permutation_below_real": _permutation_answer(best_basis),
+        "f1_9_depends_on_2400_2500_platform": _sensitivity_answer(
+            best_sub_report,
+            best_target_key,
+            best_model,
+            "exclude_saturation_platform",
+        ),
+        "f1_10_depends_on_5680_special_band": _sensitivity_answer(
+            best_sub_report,
+            best_target_key,
+            best_model,
+            "exclude_5680_special_band",
+        ),
+        "f1_11_depends_on_low_orientation_intervals": _sensitivity_answer(
+            best_sub_report,
+            best_target_key,
+            best_model,
+            "exclude_low_orientation_confidence",
+        ),
+        "f1_12_waveform_features_improved_results": _waveform_improvement(
+            existing_best,
+            enhanced_best,
+        ),
+        "f1_13_top_stable_features": enhanced.get("top_10_stable_features", []),
+        "f1_14_worst_regime": _worst_regime(enhanced),
+        "f1_15_morphology_next_stage_value": (
+            "audit_only_discuss_label_redesign_only_if_error_patterns_support_it"
+        ),
+        "f1_16_next_minimal_research_action": _next_recommendation(decision, sklearn_available),
+        "f1_17_research_only_marking_complete": _all_research_marked(
+            snapshot,
+            existing,
+            waveform,
+            enhanced,
+        ),
         "1_existing_features_sufficient": existing_sufficient,
         "2_waveform_feature_extraction_triggered": waveform_triggered,
-        "3_enhanced_waveform_features_improved_results": None
-        if not enhanced_best
-        else bool(enhanced_best),
-        "4_best_model": None if not enhanced_best else enhanced_best.get("model"),
+        "2b_waveform_features_reused_without_stage3_rerun": waveform_triggered,
+        "3_enhanced_waveform_features_improved_results": _waveform_improvement(
+            existing_best,
+            enhanced_best,
+        ),
+        "4_best_model": best_basis.get("model"),
+        "4b_best_feature_set": best_basis.get("feature_set"),
         "5_most_stable_target_view": _stable_target(existing, enhanced),
         "6_largest_feature_groups": _largest_feature_groups(enhanced),
-        "7_regime_dependent_signal": "not_evaluated_no_completed_models",
-        "8_depends_on_2400_2500_platform": "not_evaluated_no_completed_models",
-        "9_depends_on_5680_special_band": "not_evaluated_no_completed_models",
-        "10_depends_on_low_orientation_intervals": "not_evaluated_no_completed_models",
-        "11_permutation_significantly_below_real": "not_evaluated_no_completed_models",
-        "12_stable_folds": [],
-        "13_worst_regime": "not_evaluated_no_completed_models",
-        "14_morphology_next_stage_value": "audit_only_no_upgrade_without_completed_models",
-        "15_stc_apes_deep_learning_discussion": "not_warranted_before_classical_baseline_runs",
+        "6b_top_contributing_feature_groups": _top_ablation_groups(enhanced),
+        "7_regime_dependent_signal": _regime_signal(enhanced),
+        "8_depends_on_2400_2500_platform": _sensitivity_answer(
+            best_sub_report,
+            best_target_key,
+            best_model,
+            "exclude_saturation_platform",
+        ),
+        "9_depends_on_5680_special_band": _sensitivity_answer(
+            best_sub_report,
+            best_target_key,
+            best_model,
+            "exclude_5680_special_band",
+        ),
+        "10_depends_on_low_orientation_intervals": _sensitivity_answer(
+            best_sub_report,
+            best_target_key,
+            best_model,
+            "exclude_low_orientation_confidence",
+        ),
+        "11_permutation_significantly_below_real": _permutation_answer(best_basis),
+        "12_stable_folds": _stable_folds(best_sub_report, best_target_key, best_model),
+        "13_worst_regime": _worst_regime(enhanced),
+        "14_morphology_next_stage_value": "audit_only_not_a_model_feature_in_this_run",
+        "15_stc_apes_deep_learning_discussion": _stc_apes_deep_learning_answer(decision),
         "16_human_confirmations_still_needed": _human_confirmations(sklearn_available),
         "17_research_only_marking_complete": _all_research_marked(
             snapshot,
@@ -239,6 +319,14 @@ def build_decision(
                 "best_result": enhanced.get("best_result"),
                 "feature_group_ablation": enhanced.get("feature_group_ablation"),
                 "permutation_importance": enhanced.get("permutation_importance"),
+                "top_10_stable_features": enhanced.get("top_10_stable_features"),
+                "regime_specific_error_analysis": enhanced.get(
+                    "regime_specific_error_analysis"
+                ),
+                "special_band_error_analysis": enhanced.get("special_band_error_analysis"),
+                "low_orientation_error_analysis": enhanced.get(
+                    "low_orientation_error_analysis"
+                ),
                 "warnings": enhanced.get("warnings"),
             },
         },
@@ -290,6 +378,234 @@ def _stable_target(existing: dict[str, Any], enhanced: dict[str, Any]) -> str | 
     return None
 
 
+def _best_basis(existing_best: dict[str, Any], enhanced_best: dict[str, Any]) -> dict[str, Any]:
+    existing_s = _none_safe_float(existing_best.get("spearman"))
+    enhanced_s = _none_safe_float(enhanced_best.get("spearman"))
+    if enhanced_best and enhanced_s >= existing_s:
+        return enhanced_best
+    return existing_best
+
+
+def _best_sub_report(enhanced: dict[str, Any], enhanced_best: dict[str, Any]) -> dict[str, Any]:
+    feature_set = enhanced_best.get("feature_set")
+    if not feature_set:
+        return {}
+    return _as_dict(_as_dict(enhanced.get("sub_reports")).get(str(feature_set)))
+
+
+def _signal_detected(best: dict[str, Any]) -> bool:
+    spearman = best.get("spearman")
+    margin = best.get("real_minus_permutation_spearman")
+    stable_folds = best.get("stable_positive_spearman_folds")
+    if spearman is None or margin is None:
+        return False
+    return float(spearman) > 0.0 and float(margin) > 0.05 and int(stable_folds or 0) >= 2
+
+
+def _stratified_signal(
+    *,
+    report: dict[str, Any],
+    target_key: str,
+    model: str,
+    enhanced: dict[str, Any],
+) -> bool:
+    if not report or not target_key or not model:
+        return False
+    filters = (
+        "exclude_saturation_platform",
+        "exclude_5680_special_band",
+        "exclude_low_orientation_confidence",
+        "exclude_all_special_flags",
+    )
+    for filter_name in filters:
+        answer = _sensitivity_answer(report, target_key, model, filter_name)
+        filtered_s = answer.get("filtered_spearman")
+        if filtered_s is not None and float(filtered_s) > 0.10:
+            return True
+    regime = _regime_signal(enhanced)
+    return bool(regime.get("regime_dependent"))
+
+
+def _target_stability(
+    target: str,
+    existing: dict[str, Any],
+    enhanced: dict[str, Any],
+) -> dict[str, Any]:
+    candidates = []
+    for report in [existing, *_as_dict(enhanced.get("sub_reports")).values()]:
+        for target_key, by_model in _as_dict(report.get("contiguous_cv")).items():
+            if not str(target_key).startswith(f"{target}:"):
+                continue
+            for model, summary in _as_dict(by_model).items():
+                aggregate = _as_dict(_as_dict(summary).get("aggregate"))
+                if aggregate.get("spearman") is None:
+                    continue
+                candidates.append(
+                    {
+                        "feature_set": _as_dict(report).get("feature_set_name"),
+                        "target_key": target_key,
+                        "model": model,
+                        "spearman": aggregate.get("spearman"),
+                        "stable_positive_spearman_folds": _as_dict(summary).get(
+                            "stable_positive_spearman_folds"
+                        ),
+                    }
+                )
+    candidates.sort(key=lambda row: _none_safe_float(row.get("spearman")), reverse=True)
+    return {"status": "evaluated", "best": candidates[0] if candidates else None}
+
+
+def _reference_target_comparison(
+    existing: dict[str, Any],
+    enhanced: dict[str, Any],
+) -> dict[str, Any]:
+    output = {}
+    for target in ("receiver_mean", "receiver_max"):
+        output[target] = _target_stability(target, existing, enhanced).get("best")
+    return output
+
+
+def _contiguous_summary(
+    report: dict[str, Any],
+    target_key: str,
+    model: str,
+) -> dict[str, Any]:
+    summary = _as_dict(_as_dict(_as_dict(report.get("contiguous_cv")).get(target_key)).get(model))
+    if not summary:
+        return {"status": "not_available"}
+    return {
+        "status": summary.get("status"),
+        "fold_count": summary.get("fold_count"),
+        "stable_positive_spearman_folds": summary.get("stable_positive_spearman_folds"),
+        "aggregate": summary.get("aggregate"),
+        "folds": summary.get("folds"),
+    }
+
+
+def _leave_one_summary(
+    report: dict[str, Any],
+    target_key: str,
+    model: str,
+) -> dict[str, Any]:
+    results = _as_dict(
+        _as_dict(_as_dict(report.get("leave_one_regime_out")).get(target_key)).get(model)
+    )
+    if not results:
+        return {"status": "not_available"}
+    completed = [
+        {**_as_dict(value), "split": key}
+        for key, value in results.items()
+        if _as_dict(value).get("status") == "completed"
+    ]
+    completed.sort(key=lambda row: _none_safe_float(row.get("mae")), reverse=True)
+    return {
+        "status": "completed",
+        "splits": results,
+        "worst_by_mae": completed[0] if completed else None,
+    }
+
+
+def _permutation_answer(best: dict[str, Any]) -> dict[str, Any]:
+    margin = best.get("real_minus_permutation_spearman")
+    return {
+        "status": "evaluated" if margin is not None else "not_available",
+        "real_minus_permutation_spearman": margin,
+        "significantly_below_real": None if margin is None else float(margin) > 0.05,
+    }
+
+
+def _sensitivity_answer(
+    report: dict[str, Any],
+    target_key: str,
+    model: str,
+    filter_name: str,
+) -> dict[str, Any]:
+    sensitivity = _as_dict(_as_dict(_as_dict(report.get("sensitivity")).get(target_key)).get(model))
+    include = _as_dict(_as_dict(sensitivity.get("include_all")).get("aggregate"))
+    filtered = _as_dict(_as_dict(sensitivity.get(filter_name)).get("aggregate"))
+    include_s = include.get("spearman")
+    filtered_s = filtered.get("spearman")
+    if include_s is None or filtered_s is None:
+        return {"status": "not_available", "filter": filter_name}
+    delta = float(filtered_s) - float(include_s)
+    return {
+        "status": "evaluated",
+        "filter": filter_name,
+        "include_all_spearman": include_s,
+        "filtered_spearman": filtered_s,
+        "filtered_minus_include_spearman": delta,
+        "filtered_still_nonpositive": float(filtered_s) <= 0.0,
+        "dependency_flag": abs(delta) > 0.05,
+    }
+
+
+def _waveform_improvement(
+    existing_best: dict[str, Any],
+    enhanced_best: dict[str, Any],
+) -> dict[str, Any]:
+    existing_s = existing_best.get("spearman")
+    enhanced_s = enhanced_best.get("spearman")
+    feature_set = enhanced_best.get("feature_set")
+    if existing_s is None or enhanced_s is None:
+        return {"status": "not_available"}
+    delta = float(enhanced_s) - float(existing_s)
+    return {
+        "status": "evaluated",
+        "best_enhanced_feature_set": feature_set,
+        "existing_best_spearman": existing_s,
+        "enhanced_best_spearman": enhanced_s,
+        "enhanced_minus_existing_spearman": delta,
+        "waveform_improved": bool(feature_set != "existing_features_only" and delta > 0.0),
+    }
+
+
+def _top_ablation_groups(enhanced: dict[str, Any], *, limit: int = 10) -> list[dict[str, Any]]:
+    results = _as_list(_as_dict(enhanced.get("feature_group_ablation")).get("results"))
+    rows = [row for row in results if isinstance(row, dict)]
+    rows.sort(key=lambda row: _none_safe_float(row.get("spearman_loss_vs_full")), reverse=True)
+    return rows[:limit]
+
+
+def _regime_signal(enhanced: dict[str, Any]) -> dict[str, Any]:
+    analysis = _as_dict(enhanced.get("regime_specific_error_analysis"))
+    groups = _as_dict(analysis.get("groups"))
+    if not groups:
+        return {"status": "not_available"}
+    spearman_values = [
+        float(_as_dict(value).get("spearman"))
+        for value in groups.values()
+        if _as_dict(value).get("spearman") is not None
+    ]
+    spread = None if not spearman_values else max(spearman_values) - min(spearman_values)
+    return {
+        "status": "evaluated",
+        "spearman_spread": spread,
+        "regime_dependent": None if spread is None else spread > 0.10,
+        "worst_by_mae": analysis.get("worst_by_mae"),
+    }
+
+
+def _stable_folds(report: dict[str, Any], target_key: str, model: str) -> list[dict[str, Any]]:
+    folds = _as_list(_contiguous_summary(report, target_key, model).get("folds"))
+    return [
+        fold
+        for fold in folds
+        if isinstance(fold, dict)
+        and fold.get("spearman") is not None
+        and float(fold["spearman"]) > 0.0
+    ]
+
+
+def _worst_regime(enhanced: dict[str, Any]) -> Any:
+    return _as_dict(enhanced.get("regime_specific_error_analysis")).get("worst_by_mae")
+
+
+def _stc_apes_deep_learning_answer(decision: str) -> str:
+    if decision == "exploratory_signal_detected_continue_classical_modeling":
+        return "not_next_step_continue_classical_feature_review_before_STC_APES_or_deep_learning"
+    return "not_warranted_before_stable_classical_signal"
+
+
 def _largest_feature_groups(enhanced: dict[str, Any], *, limit: int = 10) -> list[dict[str, Any]]:
     combined = _as_dict(_as_dict(enhanced.get("feature_sets")).get("combined_features"))
     groups = _as_dict(combined.get("group_counts"))
@@ -330,6 +646,11 @@ def _next_recommendation(decision: str, sklearn_available: bool) -> str:
         return (
             "Continue classical-model review only; do not advance to STC, APES, or deep "
             "learning."
+        )
+    if decision == "exploratory_signal_regime_dependent_request_stratified_study":
+        return (
+            "Run a bounded stratified audit of low-orientation, special-band, and broad-regime "
+            "subgroups; do not train regime-specific models yet."
         )
     if decision == "stop_leakage_detected":
         return "Stop and audit feature leakage before any further modeling."
@@ -399,6 +720,16 @@ def _as_dict(value: Any) -> dict[str, Any]:
 
 def _as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
+
+
+def _none_safe_float(value: Any) -> float:
+    if value is None:
+        return float("-inf")
+    try:
+        output = float(value)
+    except (TypeError, ValueError):
+        return float("-inf")
+    return output
 
 
 if __name__ == "__main__":

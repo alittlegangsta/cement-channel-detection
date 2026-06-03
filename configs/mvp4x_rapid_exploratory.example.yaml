@@ -66,6 +66,7 @@ baseline:
   elastic_net_l1_ratio: 0.5
   random_forest_n_estimators: 80
   random_forest_max_depth: 6
+  random_forest_n_jobs: -1
   hist_gradient_boosting_max_iter: 120
   hist_gradient_boosting_max_leaf_nodes: 15
   sufficient_spearman_margin: 0.05
@@ -78,4 +79,3 @@ waveform_features:
   side_labels: [A, B, C, D, E, F, G, H]
   receiver_count: 13
   frequency_unit: cycles_per_sample
-
