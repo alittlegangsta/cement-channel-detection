@@ -10,6 +10,8 @@ from typing import Any
 import numpy as np
 from scipy.stats import spearmanr
 
+from cement_channel.modeling.dependencies import require_sklearn_for_modeling
+
 BASELINE_REPORT_VERSION = "mvp4x_existing_feature_baselines_v001"
 BASELINE_CSV_VERSION = "mvp4x_existing_feature_baselines_csv_v001"
 MODEL_NAMES = (
@@ -46,6 +48,10 @@ class Mvp4xBaselineReport:
     allowed_scope: str
     model_backend: str
     sklearn_available: bool
+    modeling_environment: dict[str, Any]
+    model_random_seed: int
+    cv_protocol: dict[str, Any]
+    permutation_protocol: dict[str, Any]
     target_views: list[str]
     sample_count: int
     feature_count: int
@@ -120,11 +126,10 @@ def run_mvp4x_baselines(
     errors: list[str] = []
     _validate_research_flags(snapshot, errors)
     baseline_config = _as_dict(config.get("baseline"))
-    rng = np.random.default_rng(int(baseline_config.get("random_seed", 20240603)))
-    sklearn_modules = _optional_sklearn_modules()
-    sklearn_available = bool(sklearn_modules)
-    if not sklearn_available:
-        warnings.append("scikit-learn is unavailable; all requested sklearn models are skipped.")
+    random_seed = int(baseline_config.get("random_seed", 20240603))
+    rng = np.random.default_rng(random_seed)
+    sklearn_modules, modeling_environment = require_sklearn_for_modeling()
+    sklearn_available = True
 
     depth = np.asarray(snapshot["depth"], dtype=np.float32).reshape(-1)
     feature_matrix = np.asarray(snapshot[feature_matrix_key], dtype=np.float32)
@@ -180,7 +185,7 @@ def run_mvp4x_baselines(
         "results": {},
     }
 
-    if sklearn_available and not errors:
+    if not errors:
         for target in target_views:
             y = np.asarray(snapshot[target], dtype=np.float32).reshape(-1)
             base_mask = np.isfinite(y) & np.all(np.isfinite(X), axis=1)
@@ -258,10 +263,8 @@ def run_mvp4x_baselines(
             for model_name in MODEL_NAMES:
                 key = f"{target}:{feature_set_name}:{model_name}"
                 model_summaries[key] = {
-                    "status": "skipped_dependency_unavailable"
-                    if not sklearn_available
-                    else "skipped_errors",
-                    "reason": "scikit-learn unavailable" if not sklearn_available else errors,
+                    "status": "skipped_errors",
+                    "reason": errors,
                 }
                 rows.append(
                     {
@@ -290,8 +293,31 @@ def run_mvp4x_baselines(
         inputs=inputs,
         feature_set_name=feature_set_name,
         allowed_scope="research_only_exploratory_weak_label_regression",
-        model_backend="scikit_learn" if sklearn_available else "sklearn_unavailable_all_skipped",
-        sklearn_available=sklearn_available,
+        model_backend="scikit_learn",
+        sklearn_available=True,
+        modeling_environment=modeling_environment.to_dict(),
+        model_random_seed=random_seed,
+        cv_protocol={
+            "method": "contiguous_depth_block_cv",
+            "n_folds": int(baseline_config.get("n_contiguous_folds", 3)),
+            "depth_sorted": True,
+            "metadata_only_fields": [
+                "depth",
+                "broad_regime_id",
+                "special-band flags",
+                "label_confidence",
+                "orientation_confidence",
+                "inclination",
+                "morphology arrays",
+                "CAST-derived fields",
+            ],
+        },
+        permutation_protocol={
+            "enabled": True,
+            "target_permutation_count": int(baseline_config.get("permutation_count", 20)),
+            "seed": random_seed,
+            "same_cv_protocol": True,
+        },
         target_views=list(target_views),
         sample_count=int(depth.size),
         feature_count=int(X.shape[1]),
@@ -368,6 +394,17 @@ def format_mvp4x_baseline_markdown(report: Mvp4xBaselineReport) -> str:
         "",
         "Derived binary metrics are derived_binary_audit_only and are not final labels.",
     ]
+    lines.extend(
+        [
+            f"- python_version: {report.modeling_environment.get('python_version')}",
+            f"- sklearn_version: {report.modeling_environment.get('sklearn_version')}",
+            f"- numpy_version: {report.modeling_environment.get('numpy_version')}",
+            f"- scipy_version: {report.modeling_environment.get('scipy_version')}",
+            f"- model_random_seed: {report.model_random_seed}",
+            f"- cv_protocol: {report.cv_protocol}",
+            f"- permutation_protocol: {report.permutation_protocol}",
+        ]
+    )
     if report.warnings:
         lines.extend(["", "## Warnings"])
         lines.extend(f"- {item}" for item in report.warnings)
@@ -486,6 +523,10 @@ def _run_contiguous_cv(
             "aggregate": aggregate,
             "folds": fold_metrics,
             "prediction_summary": _target_summary(oof[sample_mask]),
+            "calibration_by_target_quantile": _calibration_by_target_quantile(
+                y[sample_mask],
+                oof[sample_mask],
+            ),
         },
         "rows": rows,
         "oof_prediction": oof,
@@ -729,22 +770,6 @@ def _make_model(
     return pipeline.Pipeline([(f"step_{index}", step) for index, step in enumerate(steps)])
 
 
-def _optional_sklearn_modules() -> dict[str, Any]:
-    try:
-        from sklearn import dummy, ensemble, impute, linear_model, metrics, pipeline, preprocessing
-    except ModuleNotFoundError:
-        return {}
-    return {
-        "dummy": dummy,
-        "ensemble": ensemble,
-        "impute": impute,
-        "linear_model": linear_model,
-        "metrics": metrics,
-        "pipeline": pipeline,
-        "preprocessing": preprocessing,
-    }
-
-
 def _sensitivity_mask(snapshot: dict[str, np.ndarray], name: str) -> np.ndarray:
     depth = np.asarray(snapshot["depth"]).reshape(-1)
     mask = np.ones(depth.size, dtype=bool)
@@ -884,6 +909,37 @@ def _target_summary(values: np.ndarray) -> dict[str, float | int | None]:
         "mean": float(np.mean(finite)),
         "std": float(np.std(finite)),
     }
+
+
+def _calibration_by_target_quantile(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    *,
+    quantile_count: int = 5,
+) -> list[dict[str, float | int | None]]:
+    true = np.asarray(y_true, dtype=np.float64).reshape(-1)
+    pred = np.asarray(y_pred, dtype=np.float64).reshape(-1)
+    mask = np.isfinite(true) & np.isfinite(pred)
+    if np.count_nonzero(mask) < quantile_count:
+        return []
+    true = true[mask]
+    pred = pred[mask]
+    order = np.argsort(true)
+    rows: list[dict[str, float | int | None]] = []
+    for index, indices in enumerate(np.array_split(order, quantile_count)):
+        if indices.size == 0:
+            continue
+        rows.append(
+            {
+                "quantile_bin": index,
+                "count": int(indices.size),
+                "target_mean": float(np.mean(true[indices])),
+                "prediction_mean": float(np.mean(pred[indices])),
+                "bias": float(np.mean(pred[indices] - true[indices])),
+                "mae": float(np.mean(np.abs(pred[indices] - true[indices]))),
+            }
+        )
+    return rows
 
 
 def _pearson(true: np.ndarray, pred: np.ndarray) -> float | None:

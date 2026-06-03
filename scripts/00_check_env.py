@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import platform
+import sys
 from pathlib import Path
 
 REQUIRED_DIRS = [
@@ -24,6 +25,8 @@ def main() -> int:
     print("=== Environment Check ===")
     print(f"Project root: {project_root}")
     print(f"Platform: {platform.platform()}")
+    print(f"Python executable: {sys.executable}")
+    print(f"Python version: {platform.python_version()}")
 
     missing_dirs = [d for d in REQUIRED_DIRS if not (project_root / d).exists()]
 
@@ -34,6 +37,15 @@ def main() -> int:
         return 1
 
     print("Required directories: OK")
+    try:
+        import sklearn  # noqa: PLC0415
+    except ModuleNotFoundError:
+        print(
+            "Optional modeling dependency: scikit-learn not installed "
+            '(install with: python -m pip install -e ".[modeling]")'
+        )
+    else:
+        print(f"Optional modeling dependency: scikit-learn {sklearn.__version__}")
     print("Environment check passed.")
     return 0
 

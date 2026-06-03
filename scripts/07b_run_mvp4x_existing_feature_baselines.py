@@ -11,6 +11,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from cement_channel.data.manifest import ManifestBuildError, load_paths_config  # noqa: E402
+from cement_channel.modeling.dependencies import ModelingDependencyError  # noqa: E402
 from cement_channel.modeling.mvp4x_baselines import (  # noqa: E402
     run_existing_feature_baselines_from_paths,
 )
@@ -89,6 +90,7 @@ def main() -> int:
         )
     except (
         ManifestBuildError,
+        ModelingDependencyError,
         ExistingFeatureBaselineCliError,
         OSError,
         ValueError,
@@ -155,4 +157,3 @@ def _as_dict(value: Any) -> dict[str, Any]:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

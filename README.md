@@ -95,6 +95,16 @@ make lint
 python scripts/00_check_env.py
 ```
 
+MVP-4X classical modeling scripts require the optional modeling dependency:
+
+```bash
+python -m pip install -e ".[modeling]"
+```
+
+Base data, QC, alignment, label, and feature extraction commands do not require
+`scikit-learn`. When an MVP-4X modeling CLI is requested, missing `scikit-learn`
+must fail fast instead of writing skipped-only model reports.
+
 当前本地项目路径：
 
 ```text
