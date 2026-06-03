@@ -135,14 +135,15 @@ def run_mvp4x_baselines(
         raise ValueError("feature row count must match depth count.")
     if feature_names.size != feature_matrix.shape[1]:
         raise ValueError("feature name count must match feature column count.")
-    model_feature_mask = np.asarray(
-        snapshot.get("model_feature_mask", np.ones(feature_names.size, dtype=bool)),
-        dtype=bool,
-    ).reshape(-1)
-    if model_feature_mask.size != feature_names.size:
-        raise ValueError("model_feature_mask length must match feature names.")
     if feature_set_name != "existing_features_only":
         model_feature_mask = np.ones(feature_names.size, dtype=bool)
+    else:
+        model_feature_mask = np.asarray(
+            snapshot.get("model_feature_mask", np.ones(feature_names.size, dtype=bool)),
+            dtype=bool,
+        ).reshape(-1)
+        if model_feature_mask.size != feature_names.size:
+            raise ValueError("model_feature_mask length must match feature names.")
     model_feature_names = feature_names[model_feature_mask].tolist()
     X = np.nan_to_num(
         feature_matrix[:, model_feature_mask],
@@ -202,7 +203,10 @@ def run_mvp4x_baselines(
                     rng_seed=int(rng.integers(0, np.iinfo(np.int32).max)),
                 )
                 contiguous[target_key][model_name] = cv_result["summary"]
-                rows.extend(cv_result["rows"])
+                for row in cv_result["rows"]:
+                    row["feature_set"] = feature_set_name
+                    row["target"] = target
+                    rows.append(row)
                 model_summaries[f"{target_key}:{model_name}"] = cv_result["summary"]
                 leave_one[target_key][model_name] = _run_leave_one_regime_out(
                     X=X,
