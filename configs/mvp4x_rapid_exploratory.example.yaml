@@ -1,0 +1,81 @@
+schema_version: schema_v001
+config_version: mvp4x_rapid_exploratory_v001
+stage: MVP-4X-RAPID
+task: rapid_exploratory_modeling
+
+scope:
+  research_only: true
+  exploratory_only: true
+  weak_label_target: true
+  no_final_labels: true
+  no_ground_truth_claim: true
+  no_production_claim: true
+  no_stc: true
+  no_apes: true
+  no_deep_learning: true
+
+snapshot:
+  target_kernel: triangular_midpoint_weighted
+  primary_target: receiver_p90
+  reference_targets:
+    - receiver_mean
+    - receiver_max
+  auxiliary_targets:
+    - full_360_fraction
+    - receiver_std
+  broad_regimes:
+    - id: A
+      min_depth_ft: 2350.0
+      max_depth_ft: 3534.31
+    - id: B
+      min_depth_ft: 3534.31
+      max_depth_ft: 4678.49
+    - id: C
+      min_depth_ft: 4678.49
+      max_depth_ft: 5760.0
+  special_bands:
+    saturation_platform:
+      min_depth_ft: 2400.0
+      max_depth_ft: 2500.0
+    transition_2582:
+      center_depth_ft: 2582.79
+      half_width_ft: 2.0
+    transition_4219:
+      center_depth_ft: 4219.52
+      half_width_ft: 2.0
+    special_5680:
+      min_depth_ft: 5680.0
+      max_depth_ft: 5720.0
+  low_orientation_confidence_threshold: 0.5
+
+baseline:
+  random_seed: 20240603
+  n_contiguous_folds: 3
+  permutation_count: 20
+  target_views:
+    - receiver_p90
+    - receiver_mean
+    - receiver_max
+  derived_binary_thresholds:
+    - 0.01
+    - 0.05
+    - 0.10
+    - 0.20
+  ridge_alpha: 1.0
+  elastic_net_alpha: 0.01
+  elastic_net_l1_ratio: 0.5
+  random_forest_n_estimators: 80
+  random_forest_max_depth: 6
+  hist_gradient_boosting_max_iter: 120
+  hist_gradient_boosting_max_leaf_nodes: 15
+  sufficient_spearman_margin: 0.05
+  sufficient_min_stable_folds: 2
+
+waveform_features:
+  enabled_after_weak_existing_baseline: true
+  chunk_memory_cap_mb: 128
+  max_time_samples: 1024
+  side_labels: [A, B, C, D, E, F, G, H]
+  receiver_count: 13
+  frequency_unit: cycles_per_sample
+
