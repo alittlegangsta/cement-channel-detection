@@ -1,0 +1,81 @@
+schema_version: schema_v001
+config_version: mvp4x_screening_baseline_v001
+stage: MVP-4X-RP2-AUTO
+task: research_only_screening_baseline_consolidation
+
+scope:
+  research_only: true
+  exploratory_only: true
+  weak_label_target: true
+  no_final_labels: true
+  no_ground_truth_claim: true
+  no_production_claim: true
+  not_validated_for_deployment: true
+  no_stc: true
+  no_apes: true
+  no_deep_learning: true
+
+screening_baseline:
+  version: mvp4x_screening_policy_v001
+  target: receiver_mean
+  robust_reference_target: receiver_p90
+  sensitive_audit_target: receiver_max
+  model: Ridge
+  feature_set: existing_features_only
+  random_seed: 20240603
+  n_contiguous_folds: 3
+  blocked_gap_ft: [10.0, 25.0, 50.0]
+  supported_cohorts:
+    - pooled_bc_all
+    - pooled_bc_high_orientation
+    - regime_b_high_orientation
+    - regime_c_all
+    - regime_c_high_orientation
+  unsupported_cohorts:
+    - regime_a_all
+    - regime_b_all
+    - low_orientation_outside_supported_cohorts
+  ranking_use:
+    anomaly_ranking: true
+    candidate_screening: true
+    manual_review_prioritization: true
+  unsupported_use:
+    absolute_channel_fraction_prediction: true
+    production_inference: true
+    final_labels: true
+    ground_truth_claim: true
+    cross_well_generalization_claim: true
+    regime_a_generalization_claim: true
+
+policy_comparison:
+  candidates:
+    P0:
+      cohort: pooled_bc_all
+      model: Ridge
+      feature_set: existing_features_only
+      target: receiver_mean
+    P1:
+      cohort: pooled_bc_high_orientation
+      model: Ridge
+      feature_set: existing_features_only
+      target: receiver_mean
+    P2:
+      cohort: regime_b_high_orientation
+      model: Ridge
+      feature_set: existing_features_only
+      target: receiver_mean
+    P3:
+      cohort: regime_c_all
+      model: Ridge
+      feature_set: existing_features_only
+      target: receiver_mean
+    P4:
+      cohort: regime_c_high_orientation
+      model: Ridge
+      feature_set: existing_features_only
+      target: receiver_mean
+
+review:
+  top_k_fractions: [0.05, 0.10, 0.20]
+  ordinal_quantiles: [0.3333333333, 0.6666666667]
+  selected_interval_half_window_ft: 2.5
