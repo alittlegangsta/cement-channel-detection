@@ -1,0 +1,103 @@
+schema_version: schema_v001
+config_version: mvp4x_regime_policy_v001
+stage: MVP-4X-RP-AUTO
+task: research_only_regime_policy_consolidation
+
+scope:
+  research_only: true
+  exploratory_only: true
+  weak_label_target: true
+  no_final_labels: true
+  no_ground_truth_claim: true
+  no_production_claim: true
+  no_stc: true
+  no_apes: true
+  no_deep_learning: true
+
+snapshot:
+  target_kernel: triangular_midpoint_weighted
+  exploratory_primary_target: receiver_mean
+  robust_reference_target: receiver_p90
+  sensitive_audit_target: receiver_max
+  auxiliary_target: full_360_fraction
+  heterogeneity_audit_target: receiver_std
+
+regime_policy:
+  version: mvp4x_regime_policy_v001
+  regimes:
+    A:
+      depth_range_ft: [2350.0, 3534.31]
+      status: audit_only
+      reason: no_high_orientation_support
+      no_generalization_claim: true
+    B:
+      depth_range_ft: [3534.31, 4678.49]
+      status: exploratory_modeling_domain
+      low_high_orientation_common_support_audit_allowed: true
+    C:
+      depth_range_ft: [4678.49, 5760.0]
+      status: exploratory_modeling_domain
+      low_orientation_support_unavailable: true
+  pooled_bc:
+    status: exploratory_reference_only
+    allowed_for_comparison: true
+    not_automatically_preferred_over_regime_specific_models: true
+  orientation:
+    high_orientation: exploratory_cohort_only
+    low_orientation: audit_cohort
+    formal_orientation_filter_approved: false
+  model_use:
+    research_only_anomaly_ranking_screening: true
+    absolute_channel_fraction_prediction: false
+    production_model: false
+    final_model: false
+
+robustness:
+  random_seed: 20240603
+  repeated_seeds: [11, 23, 37, 53, 71]
+  n_contiguous_folds: 3
+  blocked_gap_ft: [10.0, 25.0, 50.0]
+  permutation_count: 20
+  bootstrap_repeats: 200
+  bootstrap_ci: [0.025, 0.975]
+  within_depth_bin_width_ft: 100.0
+  model_names:
+    - DummyRegressor
+    - Ridge
+    - ElasticNet
+    - RandomForestRegressor
+    - HistGradientBoostingRegressor
+  target_views:
+    - receiver_mean
+    - receiver_p90
+    - receiver_max
+  feature_sets:
+    - existing_features_only
+    - waveform_features_only
+    - combined_features
+  candidate_cohorts:
+    - regime_b_all
+    - regime_b_high_orientation
+    - regime_c_all
+    - regime_c_high_orientation
+    - pooled_bc_all
+    - pooled_bc_high_orientation
+  ridge_alpha: 1.0
+  elastic_net_alpha: 0.01
+  elastic_net_l1_ratio: 0.5
+  random_forest_n_estimators: 80
+  random_forest_max_depth: 6
+  random_forest_n_jobs: -1
+  hist_gradient_boosting_max_iter: 120
+  hist_gradient_boosting_max_leaf_nodes: 15
+
+ranking_audit:
+  top_fraction: [0.05, 0.10, 0.20]
+  bottom_fraction: [0.20]
+  ordinal_quantiles: [0.3333333333, 0.6666666667]
+  permutation_count: 20
+
+time_frequency_v2:
+  enabled_if_needed: false
+  reason: not triggered unless existing features are insufficient and human-approved route remains safe
+  chunk_memory_cap_mb: 128
