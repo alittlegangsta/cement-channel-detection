@@ -1,0 +1,97 @@
+schema_version: schema_v001
+config_version: mvp4x_stratified_exploratory_v001
+stage: MVP-4X-ST-AUTO
+task: stratified_exploratory_study
+
+scope:
+  research_only: true
+  exploratory_only: true
+  weak_label_target: true
+  no_final_labels: true
+  no_ground_truth_claim: true
+  no_production_claim: true
+  no_stc: true
+  no_apes: true
+  no_deep_learning: true
+
+snapshot:
+  target_kernel: triangular_midpoint_weighted
+  conservative_primary_target: receiver_mean
+  robust_reference_target: receiver_p90
+  sensitive_audit_target: receiver_max
+  auxiliary_targets:
+    - full_360_fraction
+    - receiver_std
+  low_orientation_confidence_threshold_source: snapshot.low_orientation_confidence_flag
+
+stratified_design:
+  version: mvp4x_stratified_design_v001
+  cohorts:
+    - all_samples
+    - high_orientation_cohort
+    - low_orientation_cohort
+    - regime_a_all
+    - regime_b_all
+    - regime_c_all
+    - regime_b_low_orientation
+    - regime_b_high_orientation
+    - regime_c_high_orientation
+    - regime_a_low_orientation
+    - regime_bc_all
+    - regime_bc_high_orientation
+    - regime_bc_high_orientation_exclude_2400_2500
+    - regime_bc_high_orientation_exclude_5680
+    - regime_bc_high_orientation_exclude_all_special
+  no_formal_regime_split: true
+  no_formal_orientation_filter: true
+
+baseline:
+  random_seed: 20240603
+  n_contiguous_folds: 3
+  permutation_count: 20
+  matched_control_repeats: 30
+  blocked_gap_ft: [10.0, 25.0, 50.0]
+  within_depth_bin_width_ft: 100.0
+  matched_depth_bin_width_ft: 100.0
+  matched_target_quantile_count: 4
+  target_views:
+    - receiver_mean
+    - receiver_p90
+    - receiver_max
+  extended_target_views:
+    - receiver_mean
+    - receiver_p90
+    - receiver_max
+    - full_360_fraction
+    - receiver_std
+  feature_sets:
+    - existing_features_only
+    - waveform_features_only
+    - combined_features
+  model_names:
+    - DummyRegressor
+    - Ridge
+    - ElasticNet
+    - RandomForestRegressor
+    - HistGradientBoostingRegressor
+  ridge_alpha: 1.0
+  elastic_net_alpha: 0.01
+  elastic_net_l1_ratio: 0.5
+  random_forest_n_estimators: 80
+  random_forest_max_depth: 6
+  random_forest_n_jobs: -1
+  hist_gradient_boosting_max_iter: 120
+  hist_gradient_boosting_max_leaf_nodes: 15
+  stable_spearman_margin: 0.05
+  sufficient_min_stable_folds: 2
+  feature_group_ablation_groups:
+    - existing:side_std
+    - existing:receiver_std
+    - existing:late_over_early_mean
+    - existing:side_max
+    - existing:near_far_receiver_ratio
+
+time_frequency_v2:
+  enabled_if_needed: false
+  reason: not triggered unless stratified reports show unmet criteria and user-approved safety remains satisfied
+  chunk_memory_cap_mb: 128
