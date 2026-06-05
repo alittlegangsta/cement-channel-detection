@@ -79,3 +79,11 @@ review:
   top_k_fractions: [0.05, 0.10, 0.20]
   ordinal_quantiles: [0.3333333333, 0.6666666667]
   selected_interval_half_window_ft: 2.5
+
+research_model_artifact:
+  version: mvp4x_research_screening_model_v001
+  training_cohort: pooled_bc_high_orientation
+  model: Ridge
+  target: receiver_mean
+  feature_set: existing_features_only
+  random_seed: 20240603
