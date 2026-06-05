@@ -1607,8 +1607,11 @@ def run_model_consolidation(paths: MaxAutoPaths, *, overwrite: bool) -> dict[str
     morphology = _read_json(paths.reports / f"{MORPHOLOGY_AUDIT_VERSION}.json")
     comparison = _read_json(paths.reports / f"{FEATURE_SET_COMPARISON_VERSION}.json")
     final_report = _read_json(paths.reports / "mvp4x_screening_scores_final_oof_v001.json")
-    matrix = comparison["matrix_summary"]
-    best = _as_dict(matrix.get("best_overall"))
+    target_policy = choose_target_view_policy(
+        comparison,
+        csv_path=paths.reports / f"{FEATURE_SET_COMPARISON_VERSION}.csv",
+    )
+    best = _as_dict(target_policy.get("selected_non_audit_row"))
     decision = comparison["decision_summary"]
     morphology_recommended = morphology["decision_summary"]["recommended_variants"]
     consolidation = {
@@ -1620,8 +1623,11 @@ def run_model_consolidation(paths: MaxAutoPaths, *, overwrite: bool) -> dict[str
             else "morphology_candidates_not_helpful"
         ),
         "v1_label_policy_replaced": False,
-        "best_target_view": best.get("target") or "receiver_mean",
-        "receiver_p90_recommended_research_candidate": best.get("target") == "receiver_p90",
+        "best_target_view": target_policy["best_target_view"],
+        "target_view_policy": target_policy,
+        "receiver_p90_recommended_research_candidate": target_policy[
+            "receiver_p90_recommended_research_candidate"
+        ],
         "receiver_max_audit_only": True,
         "best_feature_set": best.get("feature_set"),
         "best_classical_model": best.get("model"),
@@ -2234,6 +2240,38 @@ def format_consolidation_markdown(report: dict[str, Any]) -> str:
             "",
         ]
     )
+
+
+def choose_target_view_policy(comparison: dict[str, Any], *, csv_path: Path) -> dict[str, Any]:
+    best_overall = _as_dict(_as_dict(comparison.get("matrix_summary")).get("best_overall"))
+    csv_rows = _read_csv(csv_path)
+    non_audit = [row for row in csv_rows if row.get("target") in {"receiver_mean", "receiver_p90"}]
+    mean_best = max(
+        [row for row in non_audit if row.get("target") == "receiver_mean"],
+        key=lambda row: _float(row.get("spearman")),
+    )
+    p90_best = max(
+        [row for row in non_audit if row.get("target") == "receiver_p90"],
+        key=lambda row: _float(row.get("spearman")),
+    )
+    mean_s = _float(mean_best.get("spearman"))
+    p90_s = _float(p90_best.get("spearman"))
+    mean_lift = _float(mean_best.get("top10_lift"))
+    p90_lift = _float(p90_best.get("top10_lift"))
+    p90_candidate = bool(p90_s >= mean_s + 0.03 or p90_lift >= mean_lift + 0.20)
+    selected = p90_best if p90_candidate else mean_best
+    return {
+        "best_target_view": "receiver_p90" if p90_candidate else "receiver_mean",
+        "receiver_p90_recommended_research_candidate": p90_candidate,
+        "receiver_max_audit_only": True,
+        "receiver_max_not_selected_for_policy": True,
+        "audit_only_best_overall": best_overall
+        if best_overall.get("target") == "receiver_max"
+        else None,
+        "receiver_mean_best": mean_best,
+        "receiver_p90_best": p90_best,
+        "selected_non_audit_row": selected,
+    }
 
 
 def format_review_summary(
