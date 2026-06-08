@@ -1,0 +1,76 @@
+{
+  "allowed_outputs": {
+    "default_fetch": [
+      "json",
+      "csv",
+      "md",
+      "png",
+      "log",
+      "txt"
+    ],
+    "large_artifacts_stay_remote_by_default": [
+      "npz",
+      "joblib",
+      "h5",
+      "hdf5"
+    ]
+  },
+  "created_by": "cement-remote build-data-manifest",
+  "forbidden_operations": [
+    "modify raw MAT",
+    "delete remote data",
+    "rsync --delete",
+    "full-well STC",
+    "full-well APES",
+    "deep learning",
+    "final labels",
+    "production deployment"
+  ],
+  "local_data_root": "/home/xiaoj/cement-channel-data",
+  "local_repo_root": "/home/xiaoj/cement-channel-detection",
+  "manifest_version": "remote_data_dependency_v001",
+  "no_deep_learning": true,
+  "no_final_labels": true,
+  "no_full_well_apes": true,
+  "no_full_well_stc": true,
+  "operator_preconditions": [
+    "remote raw MAT checksum validation completed before bootstrap",
+    "remote Python environment passed scripts/00_check_env.py",
+    "remote make test and make lint passed before bootstrap"
+  ],
+  "pilot_bounds": {
+    "default_cuda_visible_devices": "1,2",
+    "max_wells": 1,
+    "requires_dry_run_before_submit": true,
+    "requires_explicit_limit_depth": true
+  },
+  "purpose": "stc-apes-pilot",
+  "remote_data_root": "/home/xiaoj/cement-channel-data",
+  "remote_dependency_checks": [
+    {
+      "access": "read_only",
+      "path": "/home/xiaoj/cement-channel-data/raw/CAST.mat",
+      "required": true,
+      "role": "cast_raw"
+    },
+    {
+      "access": "read_only",
+      "path": "/home/xiaoj/cement-channel-data/raw/D2_XSI_RelBearing_Inclination.mat",
+      "required": true,
+      "role": "pose_raw"
+    },
+    {
+      "access": "read_only",
+      "expected_files": 13,
+      "file_pattern": "XSILMR*.mat",
+      "path": "/home/xiaoj/cement-channel-data/raw/XSILMR",
+      "required": true,
+      "role": "xsi_receiver_raw_dir"
+    }
+  ],
+  "remote_repo_root": "/home/xiaoj/cement-channel-detection",
+  "remote_runs_root": "/home/xiaoj/cement-channel-runs",
+  "research_only": true,
+  "stage": "MVP-4X-bounded-research",
+  "sync_entries": []
+}

@@ -1309,6 +1309,74 @@ Agent 应按 MVP 顺序推进，不得跳跃到深度模型。
 
 > 先让数据可信，再让标签可信；先让物理 baseline 可信，再让深度模型可信；先让解释可信，再让结果可用。
 
+---
+
+## 29. Remote Runner Bootstrap 规则
+
+本仓库的确定性远程运行入口为：
+
+```bash
+cement-remote
+python scripts/cement_remote.py
+```
+
+默认固定远程路径：
+
+```text
+repo root: /home/xiaoj/cement-channel-detection
+data root: /home/xiaoj/cement-channel-data
+runs root: /home/xiaoj/cement-channel-runs
+Python environment: /home/xiaoj/conda-envs/cement_env_v3
+SSH alias: cement-server
+```
+
+远程后台任务调度顺序必须为：
+
+```text
+1. systemd-run --user
+2. tmux
+3. nohup
+```
+
+只有 `systemd-run --user` 不可用时才允许回退到 `tmux`；只有
+`systemd-run --user` 和 `tmux` 都不可用时才允许回退到 `nohup`。
+
+每个远程 run 必须写入：
+
+```text
+/home/xiaoj/cement-channel-runs/<run-id>/
+├─ manifest.json
+├─ status.json
+├─ stdout.log
+├─ stderr.log
+├─ command.sh
+├─ environment.txt
+├─ git_commit.txt
+├─ outputs.json
+└─ DONE 或 FAILED
+```
+
+Agent 使用远程运行器时必须遵守：
+
+1. `sync-code --ref` 和 `submit --ref` 必须使用完整 40 位 Git commit SHA。
+2. 不得使用密码、token、SSH 私钥、`sshpass` 或 `sudo`。
+3. 不得使用 `rm -rf`、`rsync --delete`、`git push`、`git merge`、`git reset` 或 `git rebase`。
+4. 不得修改 raw MAT，不得删除远程数据。
+5. 默认 fetch 只拉取 reports、logs、manifests、JSON、CSV、MD、PNG、TXT 和 shell command 记录。
+6. 大型 NPZ、joblib、HDF5、STC/APES map、模型权重默认留在服务器；只有显式
+   `fetch --include-large-artifacts` 才允许拉取。
+7. Bootstrap 阶段不得启动全井 STC、全井 APES、deep learning、final labels 或 production deployment。
+8. 自动测试必须使用 fake SSH backend；不得访问真实 `cement-server`。
+
+远程研究操作的 repo-local Skill 位于：
+
+```text
+.agents/skills/cement-remote-research/SKILL.md
+```
+
+bounded STC/APES pilot 只能先生成 dependency manifest 和 dry-run，不得在 bootstrap
+阶段启动昂贵计算。
+
 ## Context Budget Rules for Codex
 
 For routine implementation tasks, do not read all documentation by default.
