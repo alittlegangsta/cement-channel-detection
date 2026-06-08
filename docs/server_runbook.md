@@ -947,7 +947,49 @@ python scripts/09_train_fusion.py ...
 
 ## 21. 后台运行
 
-长时间任务建议使用 `tmux` 或 `screen`。
+长时间任务优先使用 `cement-remote submit`。`cement-remote` 必须按以下顺序选择
+后台调度器：
+
+```text
+systemd-run --user -> tmux -> nohup
+```
+
+Remote jobs must use `/home/xiaoj/conda-envs/cement_env_v3`.
+Never rely on server default Python or interactive conda activation.
+
+每个远程 job 的 `command.sh` 必须显式注入：
+
+```bash
+export PATH="/home/xiaoj/conda-envs/cement_env_v3/bin:$PATH"
+export PYTHONNOUSERSITE=1
+```
+
+如果用户通过 `cement-remote submit -- ...` 提交的 argv[0] 是 `python` 或
+`python3`，runner 必须只把 argv[0] 改写为：
+
+```text
+/home/xiaoj/conda-envs/cement_env_v3/bin/python
+```
+
+不得对任意参数做字符串替换。
+
+每个 run 的 `environment.txt` 至少记录：
+
+```text
+PATH
+command -v python
+python --version
+command -v pip
+python -m pip --version
+repo root
+data root
+run id
+scheduler
+git commit
+```
+
+长时间任务如需手工回退，才使用 `tmux` 或 `nohup`；手工命令也必须显式使用
+`/home/xiaoj/conda-envs/cement_env_v3/bin/python`。
 
 ### 21.1 tmux
 
@@ -984,7 +1026,7 @@ tmux ls
 示例：
 
 ```bash
-nohup python scripts/06_train_baseline.py \
+nohup /home/xiaoj/conda-envs/cement_env_v3/bin/python scripts/06_train_baseline.py \
   --paths configs/paths.server.yaml \
   --config configs/train_baseline.yaml \
   > /home/xiaoj/cement-channel-data/logs/exp07_baseline_v001.log 2>&1 &

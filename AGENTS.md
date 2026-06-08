@@ -1327,8 +1327,13 @@ repo root: /home/xiaoj/cement-channel-detection
 data root: /home/xiaoj/cement-channel-data
 runs root: /home/xiaoj/cement-channel-runs
 Python environment: /home/xiaoj/conda-envs/cement_env_v3
+Python executable: /home/xiaoj/conda-envs/cement_env_v3/bin/python
+Python bin dir: /home/xiaoj/conda-envs/cement_env_v3/bin
 SSH alias: cement-server
 ```
+
+Remote jobs must use `/home/xiaoj/conda-envs/cement_env_v3`.
+Never rely on server default Python or interactive conda activation.
 
 远程后台任务调度顺序必须为：
 
@@ -1367,6 +1372,8 @@ Agent 使用远程运行器时必须遵守：
    `fetch --include-large-artifacts` 才允许拉取。
 7. Bootstrap 阶段不得启动全井 STC、全井 APES、deep learning、final labels 或 production deployment。
 8. 自动测试必须使用 fake SSH backend；不得访问真实 `cement-server`。
+9. `command.sh` 必须写入 `PATH=/home/xiaoj/conda-envs/cement_env_v3/bin:$PATH`
+   和 `PYTHONNOUSERSITE=1`，并在 `environment.txt` 中记录实际 Python / pip。
 
 远程研究操作的 repo-local Skill 位于：
 

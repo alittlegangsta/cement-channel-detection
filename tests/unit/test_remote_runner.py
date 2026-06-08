@@ -6,10 +6,14 @@ from pathlib import Path
 import pytest
 
 from cement_channel.remote.runner import (
+    REMOTE_BIN,
+    REMOTE_ENV_ROOT,
+    REMOTE_PYTHON,
     FakeSshBackend,
     RemoteConfig,
     RemoteRunner,
     RemoteRunnerError,
+    _submit_script,
     build_data_dependency_manifest,
 )
 
@@ -36,6 +40,10 @@ def test_build_stc_apes_pilot_dependency_manifest(tmp_path: Path) -> None:
     assert manifest["no_full_well_apes"] is True
     assert manifest["no_deep_learning"] is True
     assert "deep learning" in manifest["forbidden_operations"]
+    assert manifest["remote_env_root"] == REMOTE_ENV_ROOT
+    assert manifest["remote_bin"] == REMOTE_BIN
+    assert manifest["remote_python"] == REMOTE_PYTHON
+    assert manifest["python_no_user_site"] is True
 
 
 def test_fake_backend_submit_writes_required_run_files(
@@ -70,9 +78,61 @@ def test_fake_backend_submit_writes_required_run_files(
 
     status = json.loads((run_dir / "status.json").read_text(encoding="utf-8"))
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    command_sh = (run_dir / "command.sh").read_text(encoding="utf-8")
     assert status["status"] == "completed"
     assert manifest["scheduler"] == "systemd-run"
     assert manifest["git_commit"] == COMMIT
+    assert manifest["remote_env_root"] == REMOTE_ENV_ROOT
+    assert manifest["remote_python"] == REMOTE_PYTHON
+    assert manifest["python_no_user_site"] is True
+    assert "export CEMENT_REMOTE_SCHEDULER=systemd-run" in command_sh
+    assert f"export CEMENT_REMOTE_GIT_COMMIT={COMMIT}" in command_sh
+
+
+@pytest.mark.parametrize("python_executable", ["python", "python3"])
+def test_submit_rewrites_python_argv0_only(
+    python_executable: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_id = f"python-rewrite-{python_executable}"
+    monkeypatch.setenv("CEMENT_REMOTE_RUN_ID", run_id)
+    runner = RemoteRunner(RemoteConfig(), FakeSshBackend(tmp_path / "fake-remote"))
+
+    runner.submit(
+        name="bounded-pilot",
+        ref=COMMIT,
+        command=[python_executable, "script.py", "--note", "literal python arg"],
+    )
+
+    run_dir = tmp_path / f"fake-remote/home/xiaoj/cement-channel-runs/{run_id}"
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    command_sh = (run_dir / "command.sh").read_text(encoding="utf-8")
+    assert manifest["command"][0] == REMOTE_PYTHON
+    assert manifest["command"][1:] == ["script.py", "--note", "literal python arg"]
+    assert f"  {REMOTE_PYTHON}" in command_sh
+    assert "literal python arg" in command_sh
+    assert f"{python_executable} script.py" not in command_sh
+    assert "/usr/bin/python" not in command_sh
+    assert "/usr/bin/python" not in json.dumps(manifest)
+
+
+def test_submit_does_not_replace_python_in_arguments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CEMENT_REMOTE_RUN_ID", "python-argument-safe")
+    runner = RemoteRunner(RemoteConfig(), FakeSshBackend(tmp_path / "fake-remote"))
+
+    runner.submit(
+        name="bounded-pilot",
+        ref=COMMIT,
+        command=["make", "PYTHON=python", "note=python"],
+    )
+
+    run_dir = tmp_path / "fake-remote/home/xiaoj/cement-channel-runs/python-argument-safe"
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["command"] == ["make", "PYTHON=python", "note=python"]
 
 
 @pytest.mark.parametrize(
@@ -184,3 +244,65 @@ def test_wait_cancel_and_fetch_policies_use_fake_backend(
     status = json.loads((run_dir / "status.json").read_text(encoding="utf-8"))
     assert status["status"] == "canceled"
     assert (run_dir / "FAILED").exists()
+
+
+def test_command_script_records_remote_environment_fields() -> None:
+    script = _submit_script(
+        RemoteConfig(),
+        run_id="env-run-001",
+        name="bounded-pilot",
+        ref=COMMIT,
+        command=[REMOTE_PYTHON, "scripts/00_check_env.py"],
+    )
+
+    assert f"REMOTE_ENV_ROOT={REMOTE_ENV_ROOT}" in script
+    assert f"REMOTE_BIN={REMOTE_BIN}" in script
+    assert f"REMOTE_PYTHON={REMOTE_PYTHON}" in script
+    assert 'export PATH="$REMOTE_BIN:${PATH:-}"' in script
+    assert "export PYTHONNOUSERSITE=1" in script
+    assert "command -v python" in script
+    assert "python --version" in script
+    assert "command -v pip" in script
+    assert "python -m pip --version" in script
+    assert "repo root: $REPO" in script
+    assert "data root: $CEMENT_CHANNEL_DATA_ROOT" in script
+    assert "run id: $RUN_ID" in script
+    assert "scheduler: $CEMENT_REMOTE_SCHEDULER" in script
+    assert "git commit: $CEMENT_REMOTE_GIT_COMMIT" in script
+
+
+def test_scheduler_launches_inject_remote_environment() -> None:
+    script = _submit_script(
+        RemoteConfig(),
+        run_id="scheduler-run-001",
+        name="bounded-pilot",
+        ref=COMMIT,
+        command=[REMOTE_PYTHON, "scripts/00_check_env.py"],
+    )
+
+    assert "systemd-run --user" in script
+    assert '--setenv=PATH="$REMOTE_BIN:${PATH:-}"' in script
+    assert "--setenv=PYTHONNOUSERSITE=1" in script
+    assert '--setenv=CEMENT_REMOTE_SCHEDULER="$scheduler"' in script
+    assert "tmux new-session" in script
+    assert 'TMUX_COMMAND="env PATH=\\"$REMOTE_BIN:${PATH:-}\\""' in script
+    assert 'TMUX_COMMAND="$TMUX_COMMAND PYTHONNOUSERSITE=1"' in script
+    assert 'CEMENT_REMOTE_RUN_ID=\\"$RUN_ID\\"' in script
+    assert 'nohup "$RUN_DIR/command.sh"' in script
+    assert 'env PATH="$REMOTE_BIN:${PATH:-}" \\' in script
+
+
+def test_command_script_uses_bash_array_to_prevent_shell_injection() -> None:
+    script = _submit_script(
+        RemoteConfig(),
+        run_id="injection-run-001",
+        name="bounded-pilot",
+        ref=COMMIT,
+        command=[REMOTE_PYTHON, "script.py", "value; touch /tmp/pwn", "$(whoami)"],
+    )
+
+    assert "${REMOTE_COMMAND[@]}" in script
+    assert "  'value; touch /tmp/pwn'" in script
+    assert "  '$(whoami)'" in script
+    assert "value; touch /tmp/pwn >>" not in script
+    assert "$(whoami) >>" not in script

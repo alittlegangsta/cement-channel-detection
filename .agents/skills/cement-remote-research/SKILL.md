@@ -22,7 +22,12 @@ remote repo root: /home/xiaoj/cement-channel-detection
 remote data root: /home/xiaoj/cement-channel-data
 remote runs root: /home/xiaoj/cement-channel-runs
 remote Python env: /home/xiaoj/conda-envs/cement_env_v3
+remote Python: /home/xiaoj/conda-envs/cement_env_v3/bin/python
+remote bin: /home/xiaoj/conda-envs/cement_env_v3/bin
 ```
+
+Remote jobs must use `/home/xiaoj/conda-envs/cement_env_v3`.
+Never rely on server default Python or interactive conda activation.
 
 ## Required Order
 
@@ -48,6 +53,24 @@ remote Python env: /home/xiaoj/conda-envs/cement_env_v3
 
 9. Monitor with `status`, `logs`, `wait`, `manifest`, and `list`.
 10. Fetch with `fetch --reports-only` by default.
+
+When a submitted command starts with `python` or `python3`, the runner must rewrite only argv[0] to:
+
+```text
+/home/xiaoj/conda-envs/cement_env_v3/bin/python
+```
+
+Do not replace arbitrary arguments containing the word `python`.
+
+Each remote `command.sh` must export:
+
+```bash
+export PATH="/home/xiaoj/conda-envs/cement_env_v3/bin:$PATH"
+export PYTHONNOUSERSITE=1
+```
+
+Each run's `environment.txt` must record `PATH`, `command -v python`, `python --version`,
+`command -v pip`, `python -m pip --version`, repo root, data root, run id, scheduler, and git commit.
 
 ## Scheduler Policy
 

@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from cement_channel.remote.runner import REMOTE_PYTHON
+
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
 
 
@@ -71,6 +73,9 @@ def test_cement_remote_fake_cli_lifecycle(tmp_path: Path) -> None:
     run_manifest_json = json.loads(run_manifest.stdout)
     assert run_manifest_json["git_commit"] == COMMIT
     assert run_manifest_json["scheduler"] == "systemd-run"
+    assert run_manifest_json["remote_python"] == REMOTE_PYTHON
+    assert run_manifest_json["python_no_user_site"] is True
+    assert run_manifest_json["command"][0] == REMOTE_PYTHON
 
     listed = _run_cli(tmp_path, "list")
     assert "integration-run-001\tcompleted\tbounded-pilot" in listed.stdout

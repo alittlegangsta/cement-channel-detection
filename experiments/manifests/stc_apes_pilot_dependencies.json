@@ -45,6 +45,8 @@
     "requires_explicit_limit_depth": true
   },
   "purpose": "stc-apes-pilot",
+  "python_no_user_site": true,
+  "remote_bin": "/home/xiaoj/conda-envs/cement_env_v3/bin",
   "remote_data_root": "/home/xiaoj/cement-channel-data",
   "remote_dependency_checks": [
     {
@@ -68,6 +70,8 @@
       "role": "xsi_receiver_raw_dir"
     }
   ],
+  "remote_env_root": "/home/xiaoj/conda-envs/cement_env_v3",
+  "remote_python": "/home/xiaoj/conda-envs/cement_env_v3/bin/python",
   "remote_repo_root": "/home/xiaoj/cement-channel-detection",
   "remote_runs_root": "/home/xiaoj/cement-channel-runs",
   "research_only": true,

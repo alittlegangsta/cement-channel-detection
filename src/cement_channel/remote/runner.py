@@ -21,7 +21,10 @@ DEFAULT_LOCAL_DATA_ROOT = Path("/home/xiaoj/cement-channel-data")
 DEFAULT_REMOTE_REPO_ROOT = "/home/xiaoj/cement-channel-detection"
 DEFAULT_REMOTE_DATA_ROOT = "/home/xiaoj/cement-channel-data"
 DEFAULT_REMOTE_RUNS_ROOT = "/home/xiaoj/cement-channel-runs"
-DEFAULT_REMOTE_PYTHON_ENV = "/home/xiaoj/conda-envs/cement_env_v3"
+REMOTE_ENV_ROOT = "/home/xiaoj/conda-envs/cement_env_v3"
+REMOTE_BIN = f"{REMOTE_ENV_ROOT}/bin"
+REMOTE_PYTHON = f"{REMOTE_BIN}/python"
+DEFAULT_REMOTE_PYTHON_ENV = REMOTE_ENV_ROOT
 DEFAULT_FETCH_ROOT = Path("outputs/remote-runs")
 DEFAULT_PILOT_MANIFEST = Path("experiments/manifests/stc_apes_pilot_dependencies.json")
 SAFE_FETCH_SUFFIXES = {".json", ".csv", ".md", ".png", ".log", ".txt", ".sh"}
@@ -62,12 +65,20 @@ class RemoteConfig:
     remote_repo_root: str = DEFAULT_REMOTE_REPO_ROOT
     remote_data_root: str = DEFAULT_REMOTE_DATA_ROOT
     remote_runs_root: str = DEFAULT_REMOTE_RUNS_ROOT
-    remote_python_env: str = DEFAULT_REMOTE_PYTHON_ENV
+    remote_env_root: str = REMOTE_ENV_ROOT
     local_fetch_root: Path = DEFAULT_FETCH_ROOT
 
     @property
+    def remote_python_env(self) -> str:
+        return self.remote_env_root
+
+    @property
+    def remote_bin(self) -> str:
+        return f"{self.remote_env_root.rstrip('/')}/bin"
+
+    @property
     def remote_python(self) -> str:
-        return f"{self.remote_python_env.rstrip('/')}/bin/python"
+        return f"{self.remote_bin}/python"
 
 
 class SshBackend:
@@ -233,10 +244,19 @@ class FakeSshBackend:
         )
         (run_dir / "stderr.log").write_text("", encoding="utf-8")
         (run_dir / "command.sh").write_text(
-            _command_script(config, run_id, command),
+            _command_script(
+                config,
+                run_id,
+                command,
+                scheduler="systemd-run",
+                git_commit=ref,
+            ),
             encoding="utf-8",
         )
-        (run_dir / "environment.txt").write_text("fake backend\n", encoding="utf-8")
+        (run_dir / "environment.txt").write_text(
+            _fake_environment_text(config, run_id, ref, "systemd-run"),
+            encoding="utf-8",
+        )
         (run_dir / "git_commit.txt").write_text(ref + "\n", encoding="utf-8")
         _write_json(run_dir / "outputs.json", _collect_fake_outputs(run_dir))
         (run_dir / "DONE").write_text("", encoding="utf-8")
@@ -381,6 +401,7 @@ class RemoteRunner:
         _validate_commit(ref)
         command_args = _strip_command_separator(command)
         _validate_remote_command(command_args)
+        resolved_command = _resolve_remote_command(self.config, command_args)
         run_id = _make_run_id(name, ref)
         if isinstance(self.backend, FakeSshBackend):
             return self.backend.submit(
@@ -388,10 +409,16 @@ class RemoteRunner:
                 run_id=run_id,
                 name=name,
                 ref=ref,
-                command=command_args,
+                command=resolved_command,
             )
         return self.backend.run_script(
-            _submit_script(self.config, run_id=run_id, name=name, ref=ref, command=command_args),
+            _submit_script(
+                self.config,
+                run_id=run_id,
+                name=name,
+                ref=ref,
+                command=resolved_command,
+            ),
             operation="submit",
         )
 
@@ -483,6 +510,10 @@ def build_data_dependency_manifest(
         "remote_repo_root": config.remote_repo_root,
         "remote_data_root": config.remote_data_root,
         "remote_runs_root": config.remote_runs_root,
+        "remote_env_root": config.remote_env_root,
+        "remote_bin": config.remote_bin,
+        "remote_python": config.remote_python,
+        "python_no_user_site": True,
         "remote_dependency_checks": [
             {
                 "role": "cast_raw",
@@ -655,7 +686,7 @@ def _config_from_args(args: argparse.Namespace) -> RemoteConfig:
         remote_repo_root=args.remote_repo_root,
         remote_data_root=args.remote_data_root,
         remote_runs_root=args.remote_runs_root,
-        remote_python_env=args.remote_python_env,
+        remote_env_root=args.remote_python_env,
         local_fetch_root=args.local_fetch_root,
     )
 
@@ -744,6 +775,13 @@ def _strip_command_separator(command: Sequence[str]) -> list[str]:
     return items
 
 
+def _resolve_remote_command(config: RemoteConfig, command: Sequence[str]) -> list[str]:
+    resolved = list(command)
+    if resolved[0] in {"python", "python3"}:
+        resolved[0] = config.remote_python
+    return resolved
+
+
 def _validate_remote_command(command: Sequence[str]) -> None:
     text = shlex.join(command)
     lowered = text.lower()
@@ -827,6 +865,10 @@ def _build_run_manifest(
         "repo_root": config.remote_repo_root,
         "data_root": config.remote_data_root,
         "runs_root": config.remote_runs_root,
+        "remote_env_root": config.remote_env_root,
+        "remote_bin": config.remote_bin,
+        "remote_python": config.remote_python,
+        "python_no_user_site": True,
         "git_commit": ref,
         "command": list(command),
         "command_text": shlex.join(command),
@@ -869,6 +911,30 @@ def _collect_fake_outputs(run_dir: Path) -> dict[str, Any]:
         "reports_only_files": report_files,
         "large_artifacts": large_artifacts,
     }
+
+
+def _fake_environment_text(
+    config: RemoteConfig,
+    run_id: str,
+    ref: str,
+    scheduler: str,
+) -> str:
+    path_value = f"{config.remote_bin}:$PATH"
+    return "\n".join(
+        [
+            f"PATH={path_value}",
+            f"command -v python: {config.remote_python}",
+            "python --version: Python 3.10.18",
+            f"command -v pip: {config.remote_bin}/pip",
+            f"python -m pip --version: pip from {config.remote_env_root}",
+            f"repo root: {config.remote_repo_root}",
+            f"data root: {config.remote_data_root}",
+            f"run id: {run_id}",
+            f"scheduler: {scheduler}",
+            f"git commit: {ref}",
+            "PYTHONNOUSERSITE=1",
+        ]
+    ) + "\n"
 
 
 def _is_safe_fetch_file(path: Path) -> bool:
@@ -981,6 +1047,8 @@ RUN_DIR={_q(config.remote_runs_root.rstrip('/') + '/' + run_id)}
 REPO={_q(config.remote_repo_root)}
 REF={_q(ref)}
 PYTHON={_q(config.remote_python)}
+REMOTE_ENV_ROOT={_q(config.remote_env_root)}
+REMOTE_BIN={_q(config.remote_bin)}
 cd "$REPO"
 git cat-file -e "$REF^{{commit}}"
 current="$(git rev-parse HEAD)"
@@ -1000,27 +1068,48 @@ CEMENT_REMOTE_STATUS
 cat > "$RUN_DIR/command.sh" <<'CEMENT_REMOTE_COMMAND'
 {command_script}
 CEMENT_REMOTE_COMMAND
+sed -i "s#__CEMENT_REMOTE_SCHEDULER__#$scheduler#g" "$RUN_DIR/command.sh"
+sed -i "s#__CEMENT_REMOTE_GIT_COMMIT__#$REF#g" "$RUN_DIR/command.sh"
 chmod 700 "$RUN_DIR/command.sh"
 touch "$RUN_DIR/stdout.log" "$RUN_DIR/stderr.log"
 printf "%s\\n" "$REF" > "$RUN_DIR/git_commit.txt"
 {{
   hostname || true
   uname -a || true
+  echo "remote_env_root=$REMOTE_ENV_ROOT"
+  echo "remote_python=$PYTHON"
   "$PYTHON" --version || true
   nvidia-smi || true
 }} > "$RUN_DIR/environment.txt" 2>&1
 cat > "$RUN_DIR/outputs.json" <<'CEMENT_REMOTE_OUTPUTS'
 {{"reports_only_files":[],"large_artifacts":[]}}
 CEMENT_REMOTE_OUTPUTS
+TMUX_COMMAND="env PATH=\\"$REMOTE_BIN:${{PATH:-}}\\""
+TMUX_COMMAND="$TMUX_COMMAND PYTHONNOUSERSITE=1"
+TMUX_COMMAND="$TMUX_COMMAND CEMENT_REMOTE_RUN_ID=\\"$RUN_ID\\""
+TMUX_COMMAND="$TMUX_COMMAND CEMENT_REMOTE_SCHEDULER=\\"$scheduler\\""
+TMUX_COMMAND="$TMUX_COMMAND CEMENT_REMOTE_GIT_COMMIT=\\"$REF\\""
+TMUX_COMMAND="$TMUX_COMMAND \\"$RUN_DIR/command.sh\\""
 case "$scheduler" in
   systemd-run)
-    systemd-run --user --unit "cement-$RUN_ID" --collect "$RUN_DIR/command.sh"
+    systemd-run --user --unit "cement-$RUN_ID" --collect \\
+      --setenv=PATH="$REMOTE_BIN:${{PATH:-}}" \\
+      --setenv=PYTHONNOUSERSITE=1 \\
+      --setenv=CEMENT_REMOTE_RUN_ID="$RUN_ID" \\
+      --setenv=CEMENT_REMOTE_SCHEDULER="$scheduler" \\
+      --setenv=CEMENT_REMOTE_GIT_COMMIT="$REF" \\
+      "$RUN_DIR/command.sh"
     ;;
   tmux)
-    tmux new-session -d -s "cement_$RUN_ID" "$RUN_DIR/command.sh"
+    tmux new-session -d -s "cement_$RUN_ID" "$TMUX_COMMAND"
     ;;
   nohup)
-    nohup "$RUN_DIR/command.sh" >/dev/null 2>&1 &
+    env PATH="$REMOTE_BIN:${{PATH:-}}" \\
+      PYTHONNOUSERSITE=1 \\
+      CEMENT_REMOTE_RUN_ID="$RUN_ID" \\
+      CEMENT_REMOTE_SCHEDULER="$scheduler" \\
+      CEMENT_REMOTE_GIT_COMMIT="$REF" \\
+      nohup "$RUN_DIR/command.sh" >/dev/null 2>&1 &
     echo "$!" > "$RUN_DIR/pid.txt"
     ;;
 esac
@@ -1028,23 +1117,79 @@ echo "submitted run_id=$RUN_ID scheduler=$scheduler"
 """
 
 
-def _command_script(config: RemoteConfig, run_id: str, command: Sequence[str]) -> str:
-    command_text = shlex.join(command)
+def _command_script(
+    config: RemoteConfig,
+    run_id: str,
+    command: Sequence[str],
+    *,
+    scheduler: str = "__CEMENT_REMOTE_SCHEDULER__",
+    git_commit: str = "__CEMENT_REMOTE_GIT_COMMIT__",
+) -> str:
     run_dir = f"{config.remote_runs_root.rstrip('/')}/{run_id}"
-    return f"""#!/usr/bin/env bash
+    command_array = _bash_array_literal("REMOTE_COMMAND", command)
+    return f"""#!/bin/bash
 set -uo pipefail
 RUN_ID={shlex.quote(run_id)}
 RUN_DIR={shlex.quote(run_dir)}
 REPO={shlex.quote(config.remote_repo_root)}
-cd "$REPO"
+REMOTE_ENV_ROOT={shlex.quote(config.remote_env_root)}
+REMOTE_BIN={shlex.quote(config.remote_bin)}
+REMOTE_PYTHON={shlex.quote(config.remote_python)}
 export CEMENT_REMOTE_RUN_ID="$RUN_ID"
 export CEMENT_REMOTE_RUN_DIR="$RUN_DIR"
 export CEMENT_CHANNEL_DATA_ROOT={shlex.quote(config.remote_data_root)}
+export CEMENT_REMOTE_SCHEDULER={shlex.quote(scheduler)}
+export CEMENT_REMOTE_GIT_COMMIT={shlex.quote(git_commit)}
 export CUDA_VISIBLE_DEVICES="${{CUDA_VISIBLE_DEVICES:-1,2}}"
+export PATH="$REMOTE_BIN:${{PATH:-}}"
+export PYTHONNOUSERSITE=1
+{command_array}
+{{
+  echo "PATH=$PATH"
+  printf "command -v python: "
+  command -v python || true
+  printf "python --version: "
+  python --version || true
+  printf "command -v pip: "
+  command -v pip || true
+  printf "python -m pip --version: "
+  python -m pip --version || true
+  echo "repo root: $REPO"
+  echo "data root: $CEMENT_CHANNEL_DATA_ROOT"
+  echo "run id: $RUN_ID"
+  echo "scheduler: $CEMENT_REMOTE_SCHEDULER"
+  echo "git commit: $CEMENT_REMOTE_GIT_COMMIT"
+}} > "$RUN_DIR/environment.txt" 2>&1
+if [ ! -x "$REMOTE_PYTHON" ]; then
+  echo "ERROR: remote Python is not executable: $REMOTE_PYTHON" >> "$RUN_DIR/stderr.log"
+  touch "$RUN_DIR/FAILED"
+cat > "$RUN_DIR/status.json" <<CEMENT_REMOTE_STATUS
+{{
+  "run_id":"$RUN_ID",
+  "status":"failed",
+  "exit_code":127,
+  "updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}}
+CEMENT_REMOTE_STATUS
+  exit 127
+fi
+if ! cd "$REPO"; then
+  echo "ERROR: repo root is not accessible: $REPO" >> "$RUN_DIR/stderr.log"
+  touch "$RUN_DIR/FAILED"
+cat > "$RUN_DIR/status.json" <<CEMENT_REMOTE_STATUS
+{{
+  "run_id":"$RUN_ID",
+  "status":"failed",
+  "exit_code":2,
+  "updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}}
+CEMENT_REMOTE_STATUS
+  exit 2
+fi
 cat > "$RUN_DIR/status.json" <<CEMENT_REMOTE_STATUS
 {{"run_id":"$RUN_ID","status":"running","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}}
 CEMENT_REMOTE_STATUS
-{command_text} >> "$RUN_DIR/stdout.log" 2>> "$RUN_DIR/stderr.log"
+"${{REMOTE_COMMAND[@]}}" >> "$RUN_DIR/stdout.log" 2>> "$RUN_DIR/stderr.log"
 exit_code=$?
 if [ "$exit_code" -eq 0 ]; then
   touch "$RUN_DIR/DONE"
@@ -1083,6 +1228,13 @@ choose_scheduler() {
   echo nohup
 }
 """
+
+
+def _bash_array_literal(name: str, values: Sequence[str]) -> str:
+    lines = [f"{name}=("]
+    lines.extend(f"  {shlex.quote(value)}" for value in values)
+    lines.append(")")
+    return "\n".join(lines)
 
 
 def _status_script(config: RemoteConfig, run_id: str) -> str:
