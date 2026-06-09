@@ -91,6 +91,16 @@ final labels
 waveform reads、reports-only fetch 和 research-only analysis；仍禁止全井 STC/APES、
 deep learning、final labels 和 production claims。
 
+MVP-4X-SA pilot fetch 后必须先运行 proxy-only matched audit：
+
+```bash
+python scripts/07x_run_mvp4x_sa_audit_auto.py \
+  --pilot-run-dir outputs/remote-runs/<run-id> \
+  --overwrite
+```
+
+该 audit 不得把 proxy 称为 formal STC/APES，且 `receiver_max` 只能作为 audit-only target。
+
 当前基础命令应全部通过：
 
 ```bash

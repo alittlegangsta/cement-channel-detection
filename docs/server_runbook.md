@@ -1019,6 +1019,24 @@ research-only analysis
 `configs/raw_variable_mapping.confirmed.yaml`，不得依赖被 `.gitignore` 忽略的本地
 `configs/raw_variable_mapping.yaml`。
 
+pilot 完成并 `fetch --reports-only` 后，必须先运行本地 proxy audit：
+
+```bash
+python scripts/07x_run_mvp4x_sa_audit_auto.py \
+  --pilot-run-dir outputs/remote-runs/<run-id> \
+  --overwrite
+```
+
+该 audit 只允许把 STC/APES 结果称为 bounded proxy。它会构建 matched feature table，
+比较 existing、waveform_v1、TF_v2、STC_proxy、APES_proxy 和组合特征，但 depth、regime、
+orientation cohort、support tier、special-band、CAST-derived arrays 和 morphology arrays
+只能作为 metadata / stratification，不得进入模型输入。`receiver_max` 永远是 audit-only。
+
+如 80 intervals 的 bootstrap、permutation、blocked-gap 或 B/C/category support 不足，
+可自动扩展到 120 intervals；120 仍不足时最多扩展到 160 intervals。扩展仍然只允许
+selected-interval chunked waveform reads、bounded proxy summaries 和 reports-only fetch，
+不得转为全井 STC/APES。
+
 ### 21.1 tmux
 
 新建会话：

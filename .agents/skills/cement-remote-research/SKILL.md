@@ -140,6 +140,25 @@ research-only analysis
 It must not run full-well STC/APES, deep learning, final labels, production deployment, or raw MAT
 modification.
 
+After fetching a bounded pilot, run the local proxy audit before any route decision:
+
+```bash
+python scripts/07x_run_mvp4x_sa_audit_auto.py \
+  --pilot-run-dir outputs/remote-runs/<run-id> \
+  --overwrite
+```
+
+The audit must keep STC/APES outputs named as bounded proxies. It may compare existing, waveform,
+TF-v2, STC_proxy, APES_proxy, and combined matched feature sets, but metadata such as depth, regime,
+orientation cohort, support tier, special-band flags, CAST-derived arrays, and morphology arrays
+must remain metadata-only and must not enter model inputs. `receiver_max` is audit-only and must not
+drive the route decision.
+
+If the 80-interval audit reports insufficient support or unstable permutation / blocked-gap /
+bootstrap results, controlled expansion may proceed to 120 intervals and then at most 160 intervals.
+Expansion still uses selected-interval chunked waveform reads, bounded proxy summaries, and
+reports-only fetch. It never authorizes full-well STC/APES extraction.
+
 ## Fetch Policy
 
 Default fetch mode is reports-only. It may pull:

@@ -1948,6 +1948,54 @@ XSI-only 输入 CAST
 
 ---
 
+## 19.1 MVP-4X-SA proxy audit
+
+MVP-4X-SA bounded pilot 的后续审计入口为：
+
+```bash
+python scripts/07x_run_mvp4x_sa_audit_auto.py \
+  --pilot-run-dir outputs/remote-runs/<run-id> \
+  --overwrite
+```
+
+该审计必须输出：
+
+```text
+reports/mvp4x_sa_proxy_contract_audit_v001.md/json
+reports/mvp4x_sa_proxy_feature_inventory_v001.csv
+interim/mvp4x_sa_matched_pilot_table_v001.npz
+reports/mvp4x_sa_matched_pilot_table_v001.md/json
+reports/mvp4x_sa_matched_screening_audit_v001.csv/md/json
+reports/mvp4x_sa_interval_expansion_audit_v001.md/json
+reports/mvp4x_sa_interval_expansion_comparison_v001.csv
+reports/mvp4x_sa_proxy_review_v001/
+reports/mvp4x_sa_proxy_decision.md/json
+```
+
+审计只能把 STC/APES 输出称为 bounded proxy，不得声称生成 formal STC
+slowness-time coherence map 或 formal APES dispersion map。matched model inputs
+只能使用 existing / waveform_v1 / TF_v2 / STC_proxy / APES_proxy 特征；depth、
+regime、orientation cohort、support tier、special-band、CAST-derived arrays 和
+morphology arrays 只能作为 metadata。`receiver_max` 永远为 audit-only。
+
+允许的 decision 仅限：
+
+```text
+request_full_research_proxy_extraction_approval
+request_formal_stc_apes_implementation_review
+request_expand_bounded_pilot_approval
+request_multiwell_or_label_review
+stop_sa_proxy_not_helpful
+stop_data_contract_issue
+stop_leakage_detected
+stop_resource_issue
+```
+
+即使 proxy 通过 gate，也只能请求用户审批；不得自动执行全井 STC/APES、final labels、
+deep learning 或 production deployment。
+
+---
+
 ## 20. 实验前 Checklist
 
 每次实验前确认：
