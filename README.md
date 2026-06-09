@@ -86,6 +86,11 @@ production model
 final labels
 ```
 
+当前唯一例外是经人工确认的 MVP-4X-SA bounded STC/APES pilot：只能运行
+80--160 个代表性 intervals、resource micro-benchmark、selected-interval chunked
+waveform reads、reports-only fetch 和 research-only analysis；仍禁止全井 STC/APES、
+deep learning、final labels 和 production claims。
+
 当前基础命令应全部通过：
 
 ```bash

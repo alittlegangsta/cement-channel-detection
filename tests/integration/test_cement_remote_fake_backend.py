@@ -64,7 +64,7 @@ def test_cement_remote_fake_cli_lifecycle(tmp_path: Path) -> None:
     assert "run_id=integration-run-001" in submit.stdout
 
     status = _run_cli(tmp_path, "status", "--run-id", "integration-run-001")
-    assert json.loads(status.stdout)["status"] == "completed"
+    assert json.loads(status.stdout)["status"] == "succeeded"
 
     logs = _run_cli(tmp_path, "logs", "--run-id", "integration-run-001", "--tail", "20")
     assert "fake backend did not execute remote command" in logs.stdout
@@ -78,7 +78,7 @@ def test_cement_remote_fake_cli_lifecycle(tmp_path: Path) -> None:
     assert run_manifest_json["command"][0] == REMOTE_PYTHON
 
     listed = _run_cli(tmp_path, "list")
-    assert "integration-run-001\tcompleted\tbounded-pilot" in listed.stdout
+    assert "integration-run-001\tsucceeded\tbounded-pilot" in listed.stdout
 
     fetched_root = tmp_path / "fetched"
     fetch = _run_cli(

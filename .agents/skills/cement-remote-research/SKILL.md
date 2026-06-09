@@ -47,8 +47,10 @@ Never rely on server default Python or interactive conda activation.
 4. Run `cement-remote sync-data --manifest <manifest> --dry-run`.
 5. Only after review, run `cement-remote sync-data --manifest <manifest>` if it has safe
    local-to-remote payloads.
-6. Run `cement-remote sync-code --ref <40-char-commit>` after the commit is available to the
-   remote repository.
+6. Run `cement-remote sync-code --ref <40-char-commit>`. For local commits that have not been
+   pushed, the runner must create a local Git bundle, upload it to
+   `/home/xiaoj/cement-channel-runs/_bundles/`, fetch it on the remote, and safely detached-checkout
+   the exact commit.
 7. Run `cement-remote verify-env`.
 8. Submit only bounded or dry-run research commands:
 
@@ -58,6 +60,9 @@ Never rely on server default Python or interactive conda activation.
 
 9. Monitor with `status`, `logs`, `wait`, `manifest`, and `list`.
 10. Fetch with `fetch --reports-only` by default.
+
+New successful runs write `status=succeeded`. Readers and wait logic must continue to treat
+historical `status=completed` as a successful terminal state.
 
 When a submitted command starts with `python` or `python3`, the runner must rewrite only argv[0] to:
 
@@ -114,6 +119,26 @@ production deployment
 
 Use full 40-character Git commit SHAs for `sync-code --ref` and `submit --ref`; never use a branch
 name, tag, short SHA, or `HEAD` for remote execution.
+
+`sync-code` may use Git bundle upload and remote `git fetch` to make a local-only commit available
+to the remote checkout. It must not use `git push`, `git merge`, `git reset`, or `git rebase`.
+
+## MVP-4X-SA Pilot Boundary
+
+The bounded STC/APES pilot may run only after runner hardening and local tests pass. It is limited
+to:
+
+```text
+80-160 representative intervals
+resource micro-benchmark
+selected-interval chunked waveform reads
+bounded STC/APES proxy summaries
+reports-only fetch
+research-only analysis
+```
+
+It must not run full-well STC/APES, deep learning, final labels, production deployment, or raw MAT
+modification.
 
 ## Fetch Policy
 

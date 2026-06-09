@@ -41,8 +41,13 @@
   "pilot_bounds": {
     "default_cuda_visible_devices": "1,2",
     "max_wells": 1,
+    "representative_interval_count_default": 120,
+    "representative_interval_count_max": 160,
+    "representative_interval_count_min": 80,
     "requires_dry_run_before_submit": true,
-    "requires_explicit_limit_depth": true
+    "requires_explicit_limit_depth": true,
+    "resource_micro_benchmark_required": true,
+    "selected_interval_chunked_waveform_reads_only": true
   },
   "purpose": "stc-apes-pilot",
   "python_no_user_site": true,

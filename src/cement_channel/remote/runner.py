@@ -27,6 +27,8 @@ REMOTE_PYTHON = f"{REMOTE_BIN}/python"
 DEFAULT_REMOTE_PYTHON_ENV = REMOTE_ENV_ROOT
 DEFAULT_FETCH_ROOT = Path("outputs/remote-runs")
 DEFAULT_PILOT_MANIFEST = Path("experiments/manifests/stc_apes_pilot_dependencies.json")
+DEFAULT_LOCAL_BUNDLE_ROOT = Path("/tmp/cement-remote-bundles")
+REMOTE_BUNDLE_DIRNAME = "_bundles"
 SAFE_FETCH_SUFFIXES = {".json", ".csv", ".md", ".png", ".log", ".txt", ".sh"}
 LARGE_ARTIFACT_SUFFIXES = {
     ".h5",
@@ -44,6 +46,8 @@ SAFE_SYNC_SUFFIXES = {".json", ".yaml", ".yml", ".csv", ".md", ".txt", ".png"}
 FULL_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 RUN_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$")
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,140}$")
+SUCCESS_STATUSES = {"succeeded", "completed"}
+TERMINAL_STATUSES = SUCCESS_STATUSES | {"failed", "canceled"}
 
 
 class RemoteRunnerError(RuntimeError):
@@ -237,7 +241,7 @@ class FakeSshBackend:
             scheduler="systemd-run",
         )
         _write_json(run_dir / "manifest.json", manifest)
-        _write_json(run_dir / "status.json", _status_payload("completed", run_id, 0))
+        _write_json(run_dir / "status.json", _status_payload("succeeded", run_id, 0))
         (run_dir / "stdout.log").write_text(
             f"fake backend did not execute remote command: {command_text}\n",
             encoding="utf-8",
@@ -364,7 +368,25 @@ class RemoteRunner:
         _validate_commit(ref)
         if isinstance(self.backend, FakeSshBackend):
             return self.backend.sync_code(self.config, ref)
-        return self.backend.run_script(_sync_code_script(self.config, ref), operation="sync-code")
+        _ensure_local_commit(self.config.local_repo_root, ref)
+        local_bundle = _create_local_code_bundle(self.config.local_repo_root, ref)
+        remote_bundle = (
+            f"{self.config.remote_runs_root.rstrip('/')}/"
+            f"{REMOTE_BUNDLE_DIRNAME}/{local_bundle.name}"
+        )
+        prepare = self.backend.run_script(
+            _prepare_bundle_upload_script(self.config),
+            operation="sync-code-prepare-bundle-upload",
+        )
+        if prepare.returncode != 0:
+            return prepare
+        upload = self.backend.rsync_upload(local_bundle, remote_bundle, dry_run=False)
+        if upload.returncode != 0:
+            return upload
+        return self.backend.run_script(
+            _sync_code_from_bundle_script(self.config, ref, remote_bundle),
+            operation="sync-code",
+        )
 
     def verify_env(self) -> CommandResult:
         if isinstance(self.backend, FakeSshBackend):
@@ -449,7 +471,7 @@ class RemoteRunner:
             except json.JSONDecodeError:
                 return result
             status = str(payload.get("status", "unknown"))
-            if status in {"completed", "failed", "canceled"}:
+            if _is_terminal_status(status):
                 return result
             time.sleep(poll_seconds)
 
@@ -539,6 +561,11 @@ def build_data_dependency_manifest(
         "sync_entries": [],
         "pilot_bounds": {
             "max_wells": 1,
+            "representative_interval_count_min": 80,
+            "representative_interval_count_max": 160,
+            "representative_interval_count_default": 120,
+            "selected_interval_chunked_waveform_reads_only": True,
+            "resource_micro_benchmark_required": True,
             "requires_explicit_limit_depth": True,
             "requires_dry_run_before_submit": True,
             "default_cuda_visible_devices": "1,2",
@@ -920,21 +947,24 @@ def _fake_environment_text(
     scheduler: str,
 ) -> str:
     path_value = f"{config.remote_bin}:$PATH"
-    return "\n".join(
-        [
-            f"PATH={path_value}",
-            f"command -v python: {config.remote_python}",
-            "python --version: Python 3.10.18",
-            f"command -v pip: {config.remote_bin}/pip",
-            f"python -m pip --version: pip from {config.remote_env_root}",
-            f"repo root: {config.remote_repo_root}",
-            f"data root: {config.remote_data_root}",
-            f"run id: {run_id}",
-            f"scheduler: {scheduler}",
-            f"git commit: {ref}",
-            "PYTHONNOUSERSITE=1",
-        ]
-    ) + "\n"
+    return (
+        "\n".join(
+            [
+                f"PATH={path_value}",
+                f"command -v python: {config.remote_python}",
+                "python --version: Python 3.10.18",
+                f"command -v pip: {config.remote_bin}/pip",
+                f"python -m pip --version: pip from {config.remote_env_root}",
+                f"repo root: {config.remote_repo_root}",
+                f"data root: {config.remote_data_root}",
+                f"run id: {run_id}",
+                f"scheduler: {scheduler}",
+                f"git commit: {ref}",
+                "PYTHONNOUSERSITE=1",
+            ]
+        )
+        + "\n"
+    )
 
 
 def _is_safe_fetch_file(path: Path) -> bool:
@@ -958,6 +988,76 @@ def _read_json(path: Path) -> dict[str, Any]:
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _run_local_git(repo_root: Path, args: Sequence[str]) -> CommandResult:
+    completed = subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return CommandResult(completed.returncode, completed.stdout, completed.stderr)
+
+
+def _ensure_local_commit(repo_root: Path, ref: str) -> None:
+    result = _run_local_git(
+        repo_root,
+        ["cat-file", "-e", f"{ref}^{{commit}}"],
+    )
+    if result.returncode != 0:
+        raise RemoteRunnerError(
+            f"Local repo does not contain commit {ref}: {result.stderr.strip()}"
+        )
+
+
+def _create_local_code_bundle(repo_root: Path, ref: str) -> Path:
+    bundle_root = Path(os.environ.get("CEMENT_REMOTE_LOCAL_BUNDLE_ROOT", DEFAULT_LOCAL_BUNDLE_ROOT))
+    bundle_root.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    bundle_path = bundle_root / f"cement-code-{ref}-{timestamp}.bundle"
+    bundle_refs = _bundle_refs_for_commit(repo_root, ref)
+    result = _run_local_git(
+        repo_root,
+        ["bundle", "create", str(bundle_path), *bundle_refs],
+    )
+    if result.returncode != 0:
+        raise RemoteRunnerError(f"Unable to create local Git bundle: {result.stderr.strip()}")
+    if not bundle_path.exists():
+        raise RemoteRunnerError(f"Git bundle was not created: {bundle_path}")
+    return bundle_path
+
+
+def _bundle_refs_for_commit(repo_root: Path, ref: str) -> list[str]:
+    current = _run_local_git(
+        repo_root,
+        ["symbolic-ref", "--quiet", "--short", "HEAD"],
+    )
+    branch_refs = _local_branches_containing_commit(repo_root, ref)
+    current_ref = f"refs/heads/{current.stdout.strip()}" if current.returncode == 0 else ""
+    if current_ref and current_ref in branch_refs:
+        return [current_ref]
+    if branch_refs:
+        return [branch_refs[0]]
+    raise RemoteRunnerError(
+        f"Commit {ref} is not reachable from a local branch; create a branch before sync-code."
+    )
+
+
+def _local_branches_containing_commit(repo_root: Path, ref: str) -> list[str]:
+    result = _run_local_git(
+        repo_root,
+        ["for-each-ref", "--contains", ref, "--format=%(refname)", "refs/heads"],
+    )
+    if result.returncode != 0:
+        raise RemoteRunnerError(
+            f"Unable to find local branches containing {ref}: {result.stderr.strip()}"
+        )
+    return sorted(line.strip() for line in result.stdout.splitlines() if line.strip())
+
+
+def _is_terminal_status(status: str) -> bool:
+    return status in TERMINAL_STATUSES
 
 
 def _doctor_script(config: RemoteConfig) -> str:
@@ -994,14 +1094,29 @@ echo "initialized remote layout at {config.remote_runs_root}"
 """
 
 
-def _sync_code_script(config: RemoteConfig, ref: str) -> str:
+def _prepare_bundle_upload_script(config: RemoteConfig) -> str:
+    return f"""\
+set -euo pipefail
+mkdir -p {_q(config.remote_runs_root.rstrip("/") + "/" + REMOTE_BUNDLE_DIRNAME)}
+cd {_q(config.remote_repo_root)}
+test "$(git rev-parse --is-inside-work-tree)" = "true"
+echo "bundle_upload_dir={config.remote_runs_root.rstrip("/")}/{REMOTE_BUNDLE_DIRNAME}"
+"""
+
+
+def _sync_code_from_bundle_script(config: RemoteConfig, ref: str, remote_bundle: str) -> str:
     return f"""\
 set -euo pipefail
 cd {_q(config.remote_repo_root)}
 test "$(git rev-parse --is-inside-work-tree)" = "true"
-git fetch origin
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "ERROR: remote repo has tracked local changes; refusing safe checkout" >&2
+  exit 2
+fi
+test -f {_q(remote_bundle)}
+git fetch {_q(remote_bundle)} '+refs/heads/*:refs/remotes/cement-bundle/*'
 git cat-file -e {_q(ref)}^{{commit}}
-git checkout --detach {_q(ref)}
+git -c advice.detachedHead=false checkout --detach {_q(ref)}
 actual="$(git rev-parse HEAD)"
 test "$actual" = {_q(ref)}
 echo "checked_out_commit=$actual"
@@ -1043,7 +1158,7 @@ def _submit_script(
     return f"""\
 set -euo pipefail
 RUN_ID={_q(run_id)}
-RUN_DIR={_q(config.remote_runs_root.rstrip('/') + '/' + run_id)}
+RUN_DIR={_q(config.remote_runs_root.rstrip("/") + "/" + run_id)}
 REPO={_q(config.remote_repo_root)}
 REF={_q(ref)}
 PYTHON={_q(config.remote_python)}
@@ -1193,7 +1308,7 @@ CEMENT_REMOTE_STATUS
 exit_code=$?
 if [ "$exit_code" -eq 0 ]; then
   touch "$RUN_DIR/DONE"
-  final_status=completed
+  final_status=succeeded
 else
   touch "$RUN_DIR/FAILED"
   final_status=failed

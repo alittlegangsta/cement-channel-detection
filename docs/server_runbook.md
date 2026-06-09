@@ -957,6 +957,18 @@ systemd-run --user -> tmux -> nohup
 Remote jobs must use `/home/xiaoj/conda-envs/cement_env_v3`.
 Never rely on server default Python or interactive conda activation.
 
+`cement-remote sync-code --ref <40-char-commit>` 必须支持本地新增 commit：
+
+```text
+local git bundle -> /home/xiaoj/cement-channel-runs/_bundles/ -> remote git fetch -> safe detached checkout
+```
+
+远程 checkout 必须拒绝 tracked dirty worktree，不得依赖 `git push`，不得使用
+`git reset` / `git merge` / `git rebase`。
+
+新提交的 run 成功时 `status.json` 写 `succeeded`；读取旧 run 时必须兼容历史
+`completed` 成功终态。
+
 每个远程 job 的 `command.sh` 必须显式注入：
 
 ```bash
@@ -990,6 +1002,19 @@ git commit
 
 长时间任务如需手工回退，才使用 `tmux` 或 `nohup`；手工命令也必须显式使用
 `/home/xiaoj/conda-envs/cement_env_v3/bin/python`。
+
+MVP-4X-SA bounded STC/APES pilot 只允许：
+
+```text
+80-160 representative intervals
+resource micro-benchmark
+selected-interval chunked waveform reads
+bounded STC/APES proxy summaries
+reports-only fetch
+research-only analysis
+```
+
+不得运行全井 STC/APES、deep learning、final labels 或 production claims。
 
 ### 21.1 tmux
 

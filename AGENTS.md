@@ -1364,15 +1364,19 @@ Never rely on server default Python or interactive conda activation.
 Agent 使用远程运行器时必须遵守：
 
 1. `sync-code --ref` 和 `submit --ref` 必须使用完整 40 位 Git commit SHA。
-2. 不得使用密码、token、SSH 私钥、`sshpass` 或 `sudo`。
-3. 不得使用 `rm -rf`、`rsync --delete`、`git push`、`git merge`、`git reset` 或 `git rebase`。
-4. 不得修改 raw MAT，不得删除远程数据。
-5. 默认 fetch 只拉取 reports、logs、manifests、JSON、CSV、MD、PNG、TXT 和 shell command 记录。
-6. 大型 NPZ、joblib、HDF5、STC/APES map、模型权重默认留在服务器；只有显式
+2. `sync-code` 必须能为本地新增 commit 生成 Git bundle，上传到远程
+   `/home/xiaoj/cement-channel-runs/_bundles/`，并从 bundle fetch 后安全 detached checkout
+   精确 commit；不得要求 push。
+3. 新 run 成功状态写为 `succeeded`；读取历史 run 时必须兼容旧的 `completed`。
+4. 不得使用密码、token、SSH 私钥、`sshpass` 或 `sudo`。
+5. 不得使用 `rm -rf`、`rsync --delete`、`git push`、`git merge`、`git reset` 或 `git rebase`。
+6. 不得修改 raw MAT，不得删除远程数据。
+7. 默认 fetch 只拉取 reports、logs、manifests、JSON、CSV、MD、PNG、TXT 和 shell command 记录。
+8. 大型 NPZ、joblib、HDF5、STC/APES map、模型权重默认留在服务器；只有显式
    `fetch --include-large-artifacts` 才允许拉取。
-7. Bootstrap 阶段不得启动全井 STC、全井 APES、deep learning、final labels 或 production deployment。
-8. 自动测试必须使用 fake SSH backend；不得访问真实 `cement-server`。
-9. `command.sh` 必须写入 `PATH=/home/xiaoj/conda-envs/cement_env_v3/bin:$PATH`
+9. Bootstrap 阶段不得启动全井 STC、全井 APES、deep learning、final labels 或 production deployment。
+10. 自动测试必须使用 fake SSH backend；不得访问真实 `cement-server`。
+11. `command.sh` 必须写入 `PATH=/home/xiaoj/conda-envs/cement_env_v3/bin:$PATH`
    和 `PYTHONNOUSERSITE=1`，并在 `environment.txt` 中记录实际 Python / pip。
 
 远程研究操作的 repo-local Skill 位于：
@@ -1381,8 +1385,9 @@ Agent 使用远程运行器时必须遵守：
 .agents/skills/cement-remote-research/SKILL.md
 ```
 
-bounded STC/APES pilot 只能先生成 dependency manifest 和 dry-run，不得在 bootstrap
-阶段启动昂贵计算。
+MVP-4X-SA bounded STC/APES pilot 只能使用 80--160 个代表性 intervals、resource
+micro-benchmark、selected-interval chunked waveform reads 和 research-only analysis；
+不得启动全井 STC/APES。
 
 ## Context Budget Rules for Codex
 
