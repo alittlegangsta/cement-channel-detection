@@ -1,3 +1,8 @@
+---
+name: cement-remote-research
+description: Use the cement-remote CLI to bootstrap, submit, monitor, fetch, and analyze bounded cement-channel research jobs on the SSH alias cement-server. Never use passwords or destructive remote operations.
+---
+
 # cement-remote-research
 
 Use this skill when running or preparing remote research jobs for the
