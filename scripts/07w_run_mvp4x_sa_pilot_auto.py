@@ -29,7 +29,7 @@ def parse_args() -> argparse.Namespace:
         dest="paths_config",
         default="configs/paths.local.yaml",
     )
-    parser.add_argument("--mapping", default="configs/raw_variable_mapping.yaml")
+    parser.add_argument("--mapping", default="configs/raw_variable_mapping.confirmed.yaml")
     parser.add_argument("--snapshot-npz", default=None)
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--interval-count", type=int, default=DEFAULT_INTERVALS)

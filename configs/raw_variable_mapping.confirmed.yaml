@@ -1,0 +1,102 @@
+schema_version: schema_v001
+mapping_version: raw_variable_mapping_v001
+well_id: D2
+status: human_confirmed_for_mvp1
+
+source_reports:
+  struct_probe_json: /home/xiaoj/cement-channel-data/manifests/mat_struct_probe_v001_full.json
+  struct_probe_report: /home/xiaoj/cement-channel-data/reports/mat_struct_probe_report_full.md
+  mapping_suggestions: /home/xiaoj/cement-channel-data/reports/raw_variable_mapping_suggestions_full.md
+
+cast:
+  file: CAST.mat
+
+  zc_variable: CAST.Zc
+  depth_variable: CAST.Depth
+
+  # No explicit azimuth variable was found.
+  # CAST has 180 sectors, so use implicit uniform azimuth:
+  # 0, 2, 4, ..., 358 degrees.
+  azimuth_variable: null
+  azimuth_mode: implicit_uniform
+  azimuth_start_deg: 0.0
+  azimuth_step_deg: 2.0
+  azimuth_count: 180
+
+  # Source CAST.Zc shape observed as [180, 24750].
+  # Therefore source order is [cast_azimuth, depth].
+  # Canonical HDF5 order must be [depth, cast_azimuth].
+  zc_source_shape_order: [cast_azimuth, depth]
+  zc_canonical_shape_order: [depth, cast_azimuth]
+  transpose_zc_to_canonical: true
+
+  depth_source_shape_order: [depth]
+  depth_unit: unknown_to_verify
+  zc_unit: MRayl
+
+pose:
+  file: D2_XSI_RelBearing_Inclination.mat
+
+  depth_variable: Depth_inc
+  inclination_variable: Inc
+  relbearing_variable: RelBearing
+
+  source_shape_order: [depth]
+  depth_unit: unknown_to_verify
+  inclination_unit: degree
+  relbearing_unit: degree
+
+xsi:
+  receiver_dir: XSILMR
+  expected_receiver_files: 13
+  receiver_file_pattern: XSILMR*.mat
+  receiver_index_source: filename
+
+  # Top-level MATLAB struct variable in each receiver file.
+  # Example: XSILMR01, XSILMR02, ..., XSILMR13
+  top_level_variable_pattern: "XSILMR{receiver:02d}"
+
+  depth_variable_pattern: "XSILMR{receiver:02d}.Depth"
+  time_variable_pattern: "XSILMR{receiver:02d}.Tad"
+
+  # Side-separated waveform fields.
+  # Example:
+  # XSILMR01.WaveRng01SideA
+  # XSILMR01.WaveRng01SideB
+  # ...
+  # XSILMR13.WaveRng13SideH
+  waveform_variable_pattern: "XSILMR{receiver:02d}.WaveRng{receiver:02d}Side{side}"
+
+  side_labels: [A, B, C, D, E, F, G, H]
+  expected_side_count: 8
+  expected_time_sample_count: 1024
+
+  # Source waveform shape observed as [1024, depth_count].
+  # Therefore source order is [time, depth].
+  # Canonical per receiver/side order should be [depth, time].
+  waveform_source_shape_order: [time, depth]
+  waveform_canonical_shape_order: [depth, time]
+  transpose_waveform_to_canonical: true
+
+  depth_source_shape_order: [depth]
+  time_variable_semantics: sampling_interval_or_time_axis
+  depth_unit: unknown_to_verify
+  time_unit: unknown_to_verify
+  waveform_dtype_source: int32
+  waveform_dtype_canonical: float32
+
+human_review:
+  required: false
+  confirmed_by: xiaoj
+  confirmed_at: TODO_FILL_DATE
+  confirmation_basis:
+    - Full struct probe confirmed all 13 XSI receiver files share the same field pattern.
+    - CAST.Zc and CAST.Depth were identified from struct probe.
+    - Pose variables Depth_inc, Inc, and RelBearing were identified from struct probe.
+    - XSI waveform fields are Side A-H fields under each receiver struct.
+  remaining_uncertainties:
+    - Confirm depth units from instrument documentation or value ranges.
+    - Confirm Tad semantics and time unit during small-slice reading.
+    - Confirm CAST Zc numeric range during small-slice reading.
+    - Confirm Inc range is physically reasonable.
+    - Confirm RelBearing range is [0, 360) or otherwise documented.

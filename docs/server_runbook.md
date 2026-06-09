@@ -1015,6 +1015,9 @@ research-only analysis
 ```
 
 不得运行全井 STC/APES、deep learning、final labels 或 production claims。
+该 pilot 默认使用可跟踪的确认版 mapping：
+`configs/raw_variable_mapping.confirmed.yaml`，不得依赖被 `.gitignore` 忽略的本地
+`configs/raw_variable_mapping.yaml`。
 
 ### 21.1 tmux
 
