@@ -101,6 +101,7 @@ def run_sa_pilot_from_paths(
     micro_benchmark_intervals: int = 8,
     receiver_limit: int = 13,
     side_limit: int = 8,
+    source_index_mode: str = "snapshot_index",
     overwrite: bool = False,
 ) -> SaPilotReport:
     _validate_interval_count(interval_count)
@@ -125,6 +126,7 @@ def run_sa_pilot_from_paths(
         micro_benchmark_intervals=micro_benchmark_intervals,
         receiver_limit=receiver_limit,
         side_limit=side_limit,
+        source_index_mode=source_index_mode,
         overwrite=overwrite,
     )
     return report
@@ -155,6 +157,7 @@ def run_sa_pilot(
     micro_benchmark_intervals: int,
     receiver_limit: int,
     side_limit: int,
+    source_index_mode: str,
     overwrite: bool,
 ) -> SaPilotReport:
     _validate_interval_count(interval_count)
@@ -168,6 +171,8 @@ def run_sa_pilot(
         raise ValueError("receiver_limit must be in [1, 13].")
     if side_limit < 1 or side_limit > 8:
         raise ValueError("side_limit must be in [1, 8].")
+    if source_index_mode not in {"snapshot_index", "depth_lookup"}:
+        raise ValueError("source_index_mode must be snapshot_index or depth_lookup.")
 
     started = time.perf_counter()
     warnings: list[str] = []
@@ -187,11 +192,13 @@ def run_sa_pilot(
         interval_count=interval_count,
         half_window_ft=interval_half_window_ft,
     )
-    depth_vectors = load_xsi_depth_vectors(
-        raw_dir=raw_dir,
-        xsi_mapping=xsi,
-        receiver_count=receiver_count,
-    )
+    depth_vectors = None
+    if source_index_mode == "depth_lookup":
+        depth_vectors = load_xsi_depth_vectors(
+            raw_dir=raw_dir,
+            xsi_mapping=xsi,
+            receiver_count=receiver_count,
+        )
 
     rows: list[dict[str, Any]] = []
     stc_peaks: list[float] = []
@@ -209,6 +216,7 @@ def run_sa_pilot(
                 xsi_mapping=xsi,
                 depth_vectors=depth_vectors,
                 center_depth_ft=float(interval["depth_center"]),
+                source_start_index=int(interval["snapshot_index"]),
                 chunk_depth_samples=chunk_depth_samples,
                 max_time_samples=max_time_samples,
                 receiver_count=receiver_count,
@@ -260,6 +268,12 @@ def run_sa_pilot(
                 "runtime_seconds": float(time.perf_counter() - interval_started),
             }
         rows.append(row)
+        print(
+            "SA pilot progress "
+            f"{ordinal}/{len(intervals)} interval_id={row['interval_id']} "
+            f"status={row['status']} runtime_seconds={row['runtime_seconds']:.3f}",
+            flush=True,
+        )
         if ordinal <= micro_benchmark_intervals:
             micro_rows.append(
                 {
@@ -312,6 +326,7 @@ def run_sa_pilot(
             "receiver_count": receiver_count,
             "side_count": len(side_labels),
             "raw_mat_read_only": True,
+            "source_index_mode": source_index_mode,
         },
         stc_policy={
             "method": "bounded_relative_delay_semblance_proxy",
@@ -519,8 +534,9 @@ def read_interval_waveform_chunk(
     *,
     raw_dir: Path,
     xsi_mapping: dict[str, Any],
-    depth_vectors: list[np.ndarray],
+    depth_vectors: list[np.ndarray] | None,
     center_depth_ft: float,
+    source_start_index: int,
     chunk_depth_samples: int,
     max_time_samples: int,
     receiver_count: int,
@@ -534,13 +550,19 @@ def read_interval_waveform_chunk(
     source_starts: dict[str, int] = {}
     observed_depths: dict[str, list[float]] = {}
     for receiver_index in range(1, receiver_count + 1):
-        depth_vector = np.asarray(depth_vectors[receiver_index - 1], dtype=np.float32).reshape(-1)
-        if depth_vector.size < chunk_depth_samples:
-            raise ValueError(f"receiver {receiver_index} has too few depth samples.")
-        nearest = int(np.nanargmin(np.abs(depth_vector - center_depth_ft)))
-        start = max(
-            0, min(nearest - chunk_depth_samples // 2, depth_vector.size - chunk_depth_samples)
-        )
+        if depth_vectors is None:
+            start = max(source_start_index - chunk_depth_samples // 2, 0)
+        else:
+            depth_vector = np.asarray(depth_vectors[receiver_index - 1], dtype=np.float32).reshape(
+                -1
+            )
+            if depth_vector.size < chunk_depth_samples:
+                raise ValueError(f"receiver {receiver_index} has too few depth samples.")
+            nearest = int(np.nanargmin(np.abs(depth_vector - center_depth_ft)))
+            start = max(
+                0,
+                min(nearest - chunk_depth_samples // 2, depth_vector.size - chunk_depth_samples),
+            )
         receiver_file = receiver_dir / f"XSILMR{receiver_index:02d}.mat"
         requests = [
             MatReadRequest(

@@ -39,6 +39,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--micro-benchmark-intervals", type=int, default=8)
     parser.add_argument("--receiver-limit", type=int, default=13)
     parser.add_argument("--side-limit", type=int, default=8)
+    parser.add_argument(
+        "--source-index-mode",
+        choices=("snapshot_index", "depth_lookup"),
+        default="snapshot_index",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
@@ -64,6 +69,7 @@ def main() -> int:
                 f"interval_count={args.interval_count}; "
                 f"chunk_depth_samples={args.chunk_depth_samples}; "
                 f"max_time_samples={args.max_time_samples}; "
+                f"source_index_mode={args.source_index_mode}; "
                 f"snapshot_npz={snapshot_npz}; "
                 f"output_dir={output_dir}."
             )
@@ -80,6 +86,7 @@ def main() -> int:
             micro_benchmark_intervals=args.micro_benchmark_intervals,
             receiver_limit=args.receiver_limit,
             side_limit=args.side_limit,
+            source_index_mode=args.source_index_mode,
             overwrite=args.overwrite,
         )
     except (
