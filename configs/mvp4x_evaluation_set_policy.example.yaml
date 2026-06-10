@@ -1,0 +1,31 @@
+policy_version: mvp4x_evaluation_set_policy_v001
+scope:
+  research_only: true
+  exploratory_only: true
+  weak_label_target: true
+  no_final_labels: true
+  no_ground_truth_claim: true
+  no_production_claim: true
+  not_validated_for_deployment: true
+sets:
+  population_like_screening_evaluation:
+    purpose: "global ranking and screening evaluation"
+    mask_definition: "finite current single-well rows; preserves available prevalence"
+    allows_performance_claim: "research_screening_only_no_ground_truth_claim"
+  supported_cohort_evaluation:
+    purpose: "tier1/tier2 B/C supported-domain ranking audit"
+    mask_definition: "tier1 or tier2 support, broad regime B/C, finite target/features"
+    allows_performance_claim: "supported_domain_research_audit_only"
+  stress_test_audit_set:
+    purpose: "false-positive-like, false-negative-like, Regime A, special band, shift stress"
+    mask_definition: "Regime A or special-band or low-orientation rows"
+    allows_performance_claim: "no_population_performance_claim"
+  manual_review_set:
+    purpose: "30-50 representative intervals for physical human review"
+    mask_definition: "divergence, local-worst, connectedness, regimes, special band, controls"
+    allows_performance_claim: "manual_evidence_only"
+rules:
+  do_not_mix_stress_test_into_population_claims: true
+  do_not_use_audit_only_targets_as_final_labels: true
+  do_not_modify_production_policy: true
+  ground_truth_claim_forbidden: true
